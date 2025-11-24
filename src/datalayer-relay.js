@@ -38,7 +38,7 @@
   ];
 
   var BUNDLED_PARAM_NAME = 'datalayer';
-  var PERSISTENT_FIELDS = ['page.frontend'];
+  var PERSISTENT_FIELDS = ['page.frontend', 'page.name'];
   var RELAY_DATALAYER_NAME = 'relayDL';
   var RELAY_VERSION = 'v2.3-' + new Date().toISOString();
 
