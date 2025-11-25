@@ -220,19 +220,42 @@
   }
 
   /******************************
-   *  DATALAYER INTERCEPTION
-   ******************************/
-  var dl = window.dataLayer = window.dataLayer || [];
-  var originalPush = dl.push.bind(dl);
+ *  SAFE DATALAYER INTERCEPTION
+ ******************************/
+var dl = window.dataLayer = window.dataLayer || [];
 
-  dl.push = function () {
+// Store current push as original (will get updated automatically)
+Object.defineProperty(dl, '_sstOriginalPush', {
+  value: dl.push,
+  writable: true
+});
+
+Object.defineProperty(dl, 'push', {
+  configurable: true,
+  enumerable: true,
+  writable: true,
+  value: function () {
+    // Always call the latest GTM push
+    var result = dl._sstOriginalPush.apply(dl, arguments);
+
+    // Process each pushed object
     for (var i = 0; i < arguments.length; i++) {
-      if (arguments[i] && typeof arguments[i] === 'object') {
-        processDataLayerObject(arguments[i]);
+      var item = arguments[i];
+      if (item && typeof item === 'object') {
+        processDataLayerObject(item);
       }
     }
-    return originalPush.apply(dl, arguments);
-  };
+
+    return result;
+  }
+});
+
+// If GTM later replaces push, update our original reference
+Object.defineProperty(dl, 'push', {
+  set: function (newPush) {
+    dl._sstOriginalPush = newPush;
+  }
+});
 
   try {
     for (var i = 0; i < dl.length; i++) {
