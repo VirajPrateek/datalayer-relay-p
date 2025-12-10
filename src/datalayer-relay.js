@@ -352,4 +352,58 @@
 	log('    Persistent Fields:', PERSISTENT_FIELDS.length ? PERSISTENT_FIELDS : 'None');
 	log('    Persistent Prefixes:', PERSIST_PREFIXES.join(', ') || 'None');
 	log('    Idle Callback:', USE_IDLE_CALLBACK ? 'ON' : 'OFF');
-	l
+	log('    Debug Mode:', DEBUG ? 'ON' : 'OFF');
+	log('========================================');
+
+	scheduleCallback(initializeGtag);
+
+	/******************************
+	 * DEBUG UTILITIES
+	 ******************************/
+	window.dataLayerRelayVersion = RELAY_VERSION;
+
+	window.dataLayerRelayStats = function() {
+		console.log('========================================');
+		console.log('    DataLayer Relay Statistics');
+		console.log('    Version:', RELAY_VERSION);
+		console.log('----------------------------------------');
+		console.log('    Processed:', eventStats.processed, '(events with event property)');
+		console.log('    Blocked:', eventStats.blocked, '(filtered events)');
+		console.log('    Sent:', eventStats.sent, '(forwarded to SST)');
+		console.log('----------------------------------------');
+		console.log('    Persistent state:', persistentState);
+		console.log('========================================');
+		return eventStats;
+	};
+
+	window.dataLayerRelayGtagOverrides = function() {
+		console.log('========================================');
+		console.log('    Gtag Override Attempts');
+		console.log('========================================');
+		console.log('    Own gtag.js URL:', ownGtagScriptUrl);
+		console.log('----------------------------------------');
+		if (gtagOverrideAttempts.length === 0) {
+			console.log('    No override attempts detected');
+		} else {
+			var ownCount = gtagOverrideAttempts.filter(function(a) { return a.accepted; }).length;
+			var externalCount = gtagOverrideAttempts.length - ownCount;
+			console.log('    Total attempts:', gtagOverrideAttempts.length);
+			console.log('    From own script:', ownCount);
+			console.log('    From external:', externalCount);
+			console.log('----------------------------------------');
+			gtagOverrideAttempts.forEach(function(attempt, index) {
+				var sourceLabel = attempt.accepted ? '✅ OWN' : '⚠️ EXTERNAL';
+				console.log('    Attempt #' + (index + 1) + ' [' + sourceLabel + ']:');
+				console.log('      Time:', attempt.timestamp);
+				console.log('      Source:', attempt.source);
+				console.log('      Type:', attempt.newValueType);
+				console.log('      Value:', attempt.newValueString);
+				console.log('      Stack:', attempt.stack);
+				console.log('');
+			});
+		}
+		console.log('========================================');
+		return gtagOverrideAttempts;
+	};
+
+})(window, document);
