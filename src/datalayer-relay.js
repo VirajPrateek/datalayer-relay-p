@@ -13,7 +13,7 @@
 	/******************************
 	 * CONFIG — EDIT THESE
 	 ******************************/
-	var MEASUREMENT_ID = '{{GA4_PROPERTY}}';
+	var MEASUREMENT_ID = '{{GA4_PROPERTY}}'; // this measurement ID is specifically for testing purpose on sportingbet BR lower environments
 	var SERVER_CONTAINER_URL = '{{SERVER_CONTAINER_URL}}';
 	var LOAD_GTAG_FROM_SST = true;
 	var DEBUG = true;
@@ -44,9 +44,13 @@
 	var BUNDLED_PARAM_NAME = 'datalayer';
 	var PERSISTENT_FIELDS = []; // existing
 	var RELAY_DATALAYER_NAME = 'relayDL';
-	var RELAY_VERSION = 'v2.3-' + new Date().toISOString();
+	var RELAY_VERSION = 'v2.4-entain';
 
-	// Convert array to lookup
+	/******************************
+     * END OF CONFIG Ã¢â‚¬â€ These should come from configuration service
+     ******************************/
+
+	// Convert COMMON_GTAG_PARAMS array to object for fast lookups
 	var COMMON_GTAG_PARAM_KEYS = {};
 	for (var i = 0; i < COMMON_GTAG_PARAMS.length; i++) {
 		COMMON_GTAG_PARAM_KEYS[COMMON_GTAG_PARAMS[i]] = true;
@@ -57,8 +61,6 @@
 	 ******************************/
 	function log() {
 		if (DEBUG && typeof console !== 'undefined') {
-			// Using slice(0) to convert arguments to a true array if needed, 
-			// though console.log.apply often works directly.
 			console.log.apply(console, arguments);
 		}
 	}
