@@ -44,11 +44,11 @@
 	var BUNDLED_PARAM_NAME = 'datalayer';
 	var PERSISTENT_FIELDS = []; // existing
 	var RELAY_DATALAYER_NAME = 'relayDL';
-	var RELAY_VERSION = 'v2.4-entain';
+	var RELAY_VERSION = 'v2.4.1-entain';
 
 	/******************************
-     * END OF CONFIG Ã¢â‚¬â€ These should come from configuration service
-     ******************************/
+	 * END OF CONFIG Ã¢â‚¬â€ These should come from configuration service
+	 ******************************/
 
 	// Convert COMMON_GTAG_PARAMS array to object for fast lookups
 	var COMMON_GTAG_PARAM_KEYS = {};
@@ -109,13 +109,13 @@
 	function initializeGtag() {
 		// Initialize custom dataLayer for gtag
 		window[RELAY_DATALAYER_NAME] = window[RELAY_DATALAYER_NAME] || [];
-		window.gtag = window.gtag || function() {
+		window.relay_gtag = window.relay_gtag || function () {
 			window[RELAY_DATALAYER_NAME].push(arguments);
 		};
 
 		// Configure gtag immediately (gtag has built-in queueing)
-		window.gtag('js', new Date());
-		window.gtag('config', MEASUREMENT_ID, {
+		window.relay_gtag('js', new Date());
+		window.relay_gtag('config', MEASUREMENT_ID, {
 			send_page_view: false,
 			transport_url: SERVER_CONTAINER_URL ? SERVER_CONTAINER_URL.replace(/\/+$/, '') : undefined
 		});
@@ -146,7 +146,7 @@
 				if (!isEmptyValue(v)) {
 					persistentState[explicit] = v;
 					// Restored original logging for explicit fields
-					log('[Persistence] Updated %o = %o', explicit, v); 
+					log('[Persistence] Updated %o = %o', explicit, v);
 				} else {
 					delete persistentState[explicit];
 					// Restored original logging for clearing explicit fields
@@ -173,7 +173,7 @@
 
 	function mergeWithPersistentState(obj) {
 		// Use original check logic which handles both PERSISTENT_FIELDS and PERSIST_PREFIXES via persistentState
-		if (!Object.keys(persistentState).length) return obj; 
+		if (!Object.keys(persistentState).length) return obj;
 
 		// Create merged object: persistent state + current event
 		var merged = {};
@@ -222,7 +222,7 @@
 
 	function sendEvent(eventName, params) {
 		params.send_to = MEASUREMENT_ID;
-		window.gtag('event', eventName, params);
+		window.relay_gtag('event', eventName, params);
 		eventStats.sent++;
 		// Restored original detailed logging
 		log('[SST forward] (#%o) gtag("event", %o, %o)', eventStats.sent, eventName, params);
@@ -237,7 +237,7 @@
 		// Only forward objects with an event property
 		if (!Object.prototype.hasOwnProperty.call(obj, 'event')) {
 			// Restored original logging
-			log('[SST process] Data-only push (no event property)'); 
+			log('[SST process] Data-only push (no event property)');
 			return;
 		}
 
@@ -248,12 +248,12 @@
 		if (!eventName || shouldBlockEventName(eventName)) {
 			eventStats.blocked++;
 			// Restored original logging
-			log('[SST blocked] Event blocked: %o', eventName); 
+			log('[SST blocked] Event blocked: %o', eventName);
 			return;
 		}
 
 		// Restored original logging
-		log('[SST process] Processing event #%o: %o', eventStats.processed, eventName); 
+		log('[SST process] Processing event #%o: %o', eventStats.processed, eventName);
 
 		// Merge with persistent state and send
 		var mergedObj = mergeWithPersistentState(obj);
@@ -287,7 +287,7 @@
 				processDataLayerObject(dl[i]);
 			}
 		}
-	} catch (_) {}
+	} catch (_) { }
 
 	/******************************
 	 * INITIALIZATION
@@ -310,7 +310,7 @@
 	 ******************************/
 	window.dataLayerRelayVersion = RELAY_VERSION;
 	// Restored original debug utility function
-	window.dataLayerRelayStats = function() {
+	window.dataLayerRelayStats = function () {
 		console.log('========================================');
 		console.log('    DataLayer Relay Statistics');
 		console.log('    Version:', RELAY_VERSION);
