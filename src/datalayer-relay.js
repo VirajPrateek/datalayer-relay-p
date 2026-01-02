@@ -47,7 +47,7 @@
 	var RELAY_VERSION = 'v2.4.1-entain';
 
 	/******************************
-	 * END OF CONFIG Ã¢â‚¬â€ These should come from configuration service
+	 * END OF CONFIG — These should come from configuration service
 	 ******************************/
 
 	// Convert COMMON_GTAG_PARAMS array to object for fast lookups
