@@ -13,8 +13,8 @@
 	/******************************
 	 * CONFIG — EDIT THESE
 	 ******************************/
-	var MEASUREMENT_ID = '{{GA4_PROPERTY}}'; // this measurement ID is specifically for testing purpose on sportingbet BR lower environments
-	var SERVER_CONTAINER_URL = '{{SERVER_CONTAINER_URL}}';
+	var MEASUREMENT_ID = 'G-M59XDSPFYX'; // this measurement ID is specifically for testing purpose on sportingbet BR lower environments
+	var SERVER_CONTAINER_URL = 'https://localhost:8888'; //'https://sst.sportingbet.bet.br';
 	var LOAD_GTAG_FROM_SST = true;
 	var DEBUG = true;
 
@@ -44,7 +44,7 @@
 	var BUNDLED_PARAM_NAME = 'datalayer';
 	var PERSISTENT_FIELDS = []; // existing
 	var RELAY_DATALAYER_NAME = 'relayDL';
-	var RELAY_VERSION = 'v2.4.1-entain';
+	var RELAY_VERSION = 'v2.5.2-entain';
 
 	/******************************
 	 * END OF CONFIG — These should come from configuration service
@@ -101,6 +101,14 @@
 
 	function isEmptyValue(val) {
 		return val === null || val === undefined || val === '';
+	}
+
+	function scheduleEvent(callback) {
+		if (typeof requestIdleCallback === 'function') {
+			requestIdleCallback(callback, { timeout: 1000 });
+		} else {
+			setTimeout(callback, 0);
+		}
 	}
 
 	/******************************
@@ -220,12 +228,28 @@
 		blocked: 0
 	};
 
-	function sendEvent(eventName, params) {
-		params.send_to = MEASUREMENT_ID;
-		window.relay_gtag('event', eventName, params);
-		eventStats.sent++;
-		// Restored original detailed logging
-		log('[SST forward] (#%o) gtag("event", %o, %o)', eventStats.sent, eventName, params);
+	var eventQueue = [];
+	var isFlushScheduled = false;
+
+	function flushEventQueue() {
+		isFlushScheduled = false;
+		while (eventQueue.length > 0) {
+			var event = eventQueue.shift();
+			event.params.send_to = MEASUREMENT_ID;
+			window.relay_gtag('event', event.eventName, event.params);
+			eventStats.sent++;
+			log('[SST forward] (#%o) gtag("event", %o, %o)', eventStats.sent, event.eventName, event.params);
+		}
+	}
+
+	function queueEvent(eventName, params) {
+		eventQueue.push({ eventName: eventName, params: params });
+		log('[SST queued] Event queued: %o (queue size: %o)', eventName, eventQueue.length);
+
+		if (!isFlushScheduled) {
+			isFlushScheduled = true;
+			scheduleEvent(flushEventQueue);
+		}
 	}
 
 	function processDataLayerObject(obj) {
@@ -255,10 +279,10 @@
 		// Restored original logging
 		log('[SST process] Processing event #%o: %o', eventStats.processed, eventName);
 
-		// Merge with persistent state and send
+		// Merge with persistent state and queue for sending
 		var mergedObj = mergeWithPersistentState(obj);
 		var params = splitAndBundleParams(mergedObj);
-		sendEvent(eventName, params);
+		queueEvent(eventName, params);
 	}
 
 	/******************************
@@ -317,6 +341,7 @@
 		console.log('----------------------------------------');
 		console.log('    Processed:', eventStats.processed, '(events with event property)');
 		console.log('    Blocked:', eventStats.blocked, '(filtered events)');
+		console.log('    Queued:', eventQueue.length, '(pending in queue)');
 		console.log('    Sent:', eventStats.sent, '(forwarded to SST)');
 		console.log('----------------------------------------');
 		console.log('    Persistent state:', persistentState);
