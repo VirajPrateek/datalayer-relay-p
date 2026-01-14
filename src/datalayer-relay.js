@@ -14,7 +14,7 @@
 	 * CONFIG — EDIT THESE
 	 ******************************/
 	var MEASUREMENT_ID = 'G-M59XDSPFYX'; // this measurement ID is specifically for testing purpose on sportingbet BR lower environments
-	var SERVER_CONTAINER_URL = 'https://localhost:8888'; //'https://sst.sportingbet.bet.br';
+	var SERVER_CONTAINER_URL = 'https://sst.sportingbet.bet.br';
 	var LOAD_GTAG_FROM_SST = true;
 	var DEBUG = true;
 
