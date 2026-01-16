@@ -10,7 +10,7 @@
 	 * CONFIG
 	 ******************************/
 	var MEASUREMENT_ID = 'G-M59XDSPFYX';
-	var SERVER_CONTAINER_URL = 'https://sst.sportingbet.bet.br';
+	var SERVER_CONTAINER_URL = 'https://localhost:8888';//'https://sst.sportingbet.bet.br';
 	var LOAD_GTAG_FROM_SST = true;
 
 	// Production default
