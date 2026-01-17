@@ -1,10 +1,9 @@
 /******************************
  * SST (Server-Side Tagging) Relay Script
- *
- * Relays ONLY event pushes to SST,
- * but also persists any keys beginning with:
- * browser.*, page.*, user.*, device.*
- *
+ *v2.5.3-allowlist-toggle
+ * 
+ * Event Prefix Allowlist Toggle
+ * 
  ******************************/
 
 (function (window, document) {
@@ -20,15 +19,21 @@
 
 	var BLOCKED_EVENT_PREFIXES = ['gtm.', 'js'];
 
-	// ==============================
-	// EVENT PREFIX ALLOWLIST TOGGLE
-	// ==============================
-	var ENABLE_EVENT_PREFIX_ALLOWLIST = true; // 🔁 default OFF (backward compatible)
+	/******************************
+	* EVENT PREFIX ALLOWLIST TOGGLE
+	/******************************/
+	var ENABLE_EVENT_PREFIX_ALLOWLIST = true; // default OFF (backward compatible)
 
 	var ALLOWED_EVENT_PREFIXES = [
-		'pageView'
+		'pageView',
+		'miniGameOpen', 'gameOpen', 'virtualOpen',
+		'firstDeposit', 'deposit',
+		'Cart.', 'cart.',
+		'Event.',
+		'contentView',
+		'paymentError', 'error'
 	];
-	// ==============================
+	/******************************/
 
 	var PARAM_DENYLIST = [
 		'send_to', 'eventCallback', 'eventTimeout',
