@@ -30,7 +30,7 @@
 		'miniGameOpen', 'gameOpen', 'virtualOpen',
 		'firstDeposit', 'deposit',
 		'Cart.', 'cart.',
-		'Event.Reg', 'Event.Track', 'Event.UKG', 'Event.kyc', 'Event.KYC', 'Event.Login',
+		'Event.Reg', 'Event.Track', 'Event.UKGC', 'Event.kyc', 'Event.KYC', 'Event.Login',
 		'contentView',
 		'paymentError', 'error'
 	];
