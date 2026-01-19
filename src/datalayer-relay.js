@@ -59,7 +59,7 @@
 	var BUNDLED_PARAM_NAME = 'datalayer';
 	var PERSISTENT_FIELDS = [];
 	var RELAY_DATALAYER_NAME = 'relayDL';
-	var RELAY_VERSION = 'v2.5.3-allowlist-toggle';
+	var RELAY_VERSION = 'v2.5.3-event-allowlist';
 
 	/******************************
 	 * END CONFIG
