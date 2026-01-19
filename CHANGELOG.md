@@ -2,23 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
-## Version & Deployment Status
-| Version | Branch | Key Feature | Deployed To | Status |
+| Version | Branch | Change Done | Deployed To | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| **v2.6.0** | `feat/performance-optimization` | Performance audit fixes | **Local** | 🚧 WIP |
-| **v2.5.3** | `feat/event-allowlist` | Event prefix allowlist | **Local** | 🚧 WIP |
-| **v2.5.2** | `main` | idleCallback w setTimeout fallback | **Prod**, **QA2** | ✅ Stable |
-
-
-
-## [v2.6.0] - feat/performance-optimization
-### Changed
-- Performance improvements per third party audit.
-
-## [v2.5.3] - allowlist-toggle
-### Added
-- Event prefix allowlist and toggle.
-
-## [v2.5.2] - main
-### Added
-- idleCallback with setTimeout fallback.
+| **v2.6.0** | `feat/performance-optimization` | Performance improvements per third party audit. | **Local** | 🚧 WIP |
+| **v2.5.4** | `feat/event-allowlist` | Unified "not allowed" events into "blocked" stats| **Local** | 🚧 WIP |
+| **v2.5.3** | `feat/event-allowlist` | Added event prefix allowlist and toggle.| **Local** | ⏩ Superseded |
+| **v2.5.2** | `main` | Added `idleCallback` with `setTimeout` fallback. | **Prod**, **QA2** | ✅ Stable |
+| **v2.4.0** | `feat/persistence-keys` | Added persistence keys prefix. | **Test** | ✅ Stable |
