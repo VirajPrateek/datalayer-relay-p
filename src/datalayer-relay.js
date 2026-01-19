@@ -1,9 +1,10 @@
 /******************************
  * SST (Server-Side Tagging) Relay Script
- *v2.5.3-allowlist-toggle
- * 
- * Event Prefix Allowlist Toggle
- * 
+ *
+ * Relays ONLY allowed event prefixes to SST,
+ * and also persists any keys beginning with:
+ * browser.*, page.*, user.*, device.*
+ *
  ******************************/
 
 (function (window, document) {
@@ -59,7 +60,7 @@
 	var BUNDLED_PARAM_NAME = 'datalayer';
 	var PERSISTENT_FIELDS = [];
 	var RELAY_DATALAYER_NAME = 'relayDL';
-	var RELAY_VERSION = 'v2.5.3-event-allowlist';
+	var RELAY_VERSION = 'v2.5.4-event-allowlist';
 
 	/******************************
 	 * END CONFIG
@@ -135,20 +136,17 @@
 	 * GTAG INITIALIZATION
 	 ******************************/
 	function initializeGtag() {
-		// Initialize custom dataLayer for gtag
 		window[RELAY_DATALAYER_NAME] = window[RELAY_DATALAYER_NAME] || [];
 		window.relay_gtag = window.relay_gtag || function () {
 			window[RELAY_DATALAYER_NAME].push(arguments);
 		};
 
-		// Configure gtag immediately (gtag has built-in queueing)
 		window.relay_gtag('js', new Date());
 		window.relay_gtag('config', MEASUREMENT_ID, {
 			send_page_view: false,
 			transport_url: SERVER_CONTAINER_URL ? SERVER_CONTAINER_URL.replace(/\/+$/, '') : undefined
 		});
 
-		// Load gtag.js script
 		var script = document.createElement('script');
 		script.async = true;
 		var idParam = 'id=' + encodeURIComponent(MEASUREMENT_ID);
@@ -192,7 +190,7 @@
 	}
 
 	/******************************
-	 * PARAMETER PROCESSING
+	 * PARAM PROCESSING
 	 ******************************/
 	function splitAndBundleParams(sourceObj) {
 		var topLevel = {};
@@ -222,8 +220,7 @@
 	var eventStats = {
 		processed: 0,
 		sent: 0,
-		blocked: 0,
-		notAllowed: 0
+		blocked: 0
 	};
 
 	var eventQueue = [];
@@ -257,15 +254,8 @@
 		eventStats.processed++;
 		var eventName = String(obj.event || '').trim();
 
-		// Block filtered events
-		if (!eventName || shouldBlockEventName(eventName)) {
+		if (!eventName || shouldBlockEventName(eventName) || !isEventAllowedByPrefix(eventName)) {
 			eventStats.blocked++;
-			return;
-		}
-
-		if (!isEventAllowedByPrefix(eventName)) {
-			eventStats.notAllowed++;
-			log('[SST not-allowed] Event rejected by allowlist:', eventName);
 			return;
 		}
 
@@ -280,7 +270,6 @@
 	var dl = window.dataLayer = window.dataLayer || [];
 	var originalPush = dl.push.bind(dl);
 
-	// Intercept dataLayer.push
 	dl.push = function () {
 		for (var i = 0; i < arguments.length; i++) {
 			if (arguments[i] && typeof arguments[i] === 'object') {
@@ -297,7 +286,7 @@
 	} catch (_) { }
 
 	/******************************
-	 * INITIALIZATION
+	 * INIT
 	 ******************************/
 	log('========================================');
 	log(' DataLayer Relay Script Loaded');
