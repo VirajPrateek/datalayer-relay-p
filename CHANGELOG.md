@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 | **v2.6.0** | `feat/performance-optimization` | Performance audit fixes | **Local** | 🚧 WIP |
 | **v2.5.3** | `feat/event-allowlist` | Event prefix allowlist | **Local** | 🚧 WIP |
 | **v2.5.2** | `main` | idleCallback w setTimeout fallback | **Prod**, **QA2** | ✅ Stable |
+| **v2.4.0** | `feat/persistence-keys` | persistence keys prefix added | **Test** | ✅ Stable |
 
 
 
@@ -22,3 +23,8 @@ All notable changes to this project will be documented in this file.
 ## [v2.5.2] - main
 ### Added
 - idleCallback with setTimeout fallback.
+
+## [v2.4.0] - feat/persistence-keys
+### Added
+- persistence keys prefix added.
+
