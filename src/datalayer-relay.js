@@ -29,7 +29,7 @@
 	var BUNDLED_PARAM_NAME = 'datalayer';
 	var PERSISTENT_FIELDS = [];
 	var RELAY_DATALAYER_NAME = 'relayDL';
-	var RELAY_VERSION = 'v2.6.0';
+	var RELAY_VERSION = 'v2.6.0-performance-optimization';
 
 	// Persistent state limits
 	var PERSIST_MAX_KEYS = 200;
