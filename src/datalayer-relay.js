@@ -1,43 +1,33 @@
 /******************************
  * SST (Server-Side Tagging) Relay Script
- * Optimized version based on Performance Review (Jan 2026)
+ *
+ * Relays ONLY event pushes to SST,
+ * but also persists any keys beginning with:
+ * browser.*, page.*, user.*, device.*
+ *
  ******************************/
 
 (function (window, document) {
 	'use strict';
 
 	/******************************
-	 * CONFIG
+	 * CONFIG — EDIT THESE
 	 ******************************/
 	var MEASUREMENT_ID = '{{GA4_PROPERTY}}';
 	var SERVER_CONTAINER_URL = '{{SERVER_CONTAINER_URL}}';
 	var LOAD_GTAG_FROM_SST = true;
-
-	// Production default
-	var DEBUG = false;
+	var DEBUG = true;
 
 	var BLOCKED_EVENT_PREFIXES = ['gtm.', 'js'];
 	var PARAM_DENYLIST = [
 		'send_to', 'eventCallback', 'eventTimeout',
-		'gtm.uniqueEventId', 'gtm.start', 'gtm.element',
-		'gtm.elementText', 'gtm.elementId'
+		'gtm.uniqueEventId', 'gtm.start', 'gtm.element', 'gtm.elementText', 'gtm.elementId'
 	];
 	var PARAM_DENY_PREFIXES = ['gtm'];
 
+	// NEW — prefixes to persist dynamically
 	var PERSIST_PREFIXES = ['browser.', 'page.', 'user.', 'device.', 'native.'];
 
-	var BUNDLED_PARAM_NAME = 'datalayer';
-	var PERSISTENT_FIELDS = [];
-	var RELAY_DATALAYER_NAME = 'relayDL';
-	var RELAY_VERSION = 'v2.6.0-performance-optimization';
-
-	// Persistent state limits
-	var PERSIST_MAX_KEYS = 200;
-	var PERSIST_TTL_MS = 30 * 60 * 1000; // 30 minutes
-
-	/******************************
-	 * FAST LOOKUPS
-	 ******************************/
 	var COMMON_GTAG_PARAMS = [
 		'page_location', 'page_referrer', 'page_title', 'link_url', 'link_domain',
 		'engagement_time_msec', 'debug_mode', 'non_interaction', 'user_id', 'session_id',
@@ -51,25 +41,34 @@
 		'video_url', 'video_provider'
 	];
 
+	var BUNDLED_PARAM_NAME = 'datalayer';
+	var PERSISTENT_FIELDS = []; // existing
+	var RELAY_DATALAYER_NAME = 'relayDL';
+	var RELAY_VERSION = 'v2.4.0-persistence-keys';
+
+	/******************************
+	 * END OF CONFIG - These should come from configuration service
+	 ******************************/
+
+	// Convert COMMON_GTAG_PARAMS array to object for fast lookups
 	var COMMON_GTAG_PARAM_KEYS = {};
 	for (var i = 0; i < COMMON_GTAG_PARAMS.length; i++) {
 		COMMON_GTAG_PARAM_KEYS[COMMON_GTAG_PARAMS[i]] = true;
 	}
 
 	/******************************
-	 * LOGGING (true no-op when DEBUG=false)
+	 * HELPER FUNCTIONS
 	 ******************************/
-	var log = DEBUG
-		? function () { console.log.apply(console, arguments); }
-		: function () { };
+	function log() {
+		if (DEBUG && typeof console !== 'undefined') {
+			console.log.apply(console, arguments);
+		}
+	}
 
-	/******************************
-	 * HELPERS
-	 ******************************/
 	function startsWithAny(str, prefixes) {
-		if (!str) return false;
+		if (!str || !prefixes || !prefixes.length) return false;
 		for (var i = 0; i < prefixes.length; i++) {
-			if (str.startsWith(prefixes[i])) return true;
+			if (str.indexOf(prefixes[i]) === 0) return true;
 		}
 		return false;
 	}
@@ -83,11 +82,11 @@
 	}
 
 	function safeStringify(obj) {
-		var seen = new WeakSet();
+		var seen = [];
 		return JSON.stringify(obj, function (key, value) {
 			if (typeof value === 'object' && value !== null) {
-				if (seen.has(value)) return '[Circular]';
-				seen.add(value);
+				if (seen.indexOf(value) !== -1) return '[Circular]';
+				seen.push(value);
 			}
 			return value;
 		});
@@ -104,115 +103,91 @@
 		return val === null || val === undefined || val === '';
 	}
 
-	function scheduleEvent(callback) {
-		if (typeof requestIdleCallback === 'function') {
-			requestIdleCallback(callback, { timeout: 1000 });
-		} else {
-			setTimeout(callback, 0);
-		}
-	}
-
 	/******************************
-	 * GTAG INIT
+	 * GTAG INITIALIZATION
 	 ******************************/
 	function initializeGtag() {
+		// Initialize custom dataLayer for gtag
 		window[RELAY_DATALAYER_NAME] = window[RELAY_DATALAYER_NAME] || [];
-		window.relay_gtag = window.relay_gtag || function () {
+		window.gtag = window.gtag || function () {
 			window[RELAY_DATALAYER_NAME].push(arguments);
 		};
 
-		window.relay_gtag('js', new Date());
-		window.relay_gtag('config', MEASUREMENT_ID, {
+		// Configure gtag immediately (gtag has built-in queueing)
+		window.gtag('js', new Date());
+		window.gtag('config', MEASUREMENT_ID, {
 			send_page_view: false,
-			transport_url: SERVER_CONTAINER_URL
-				? SERVER_CONTAINER_URL.replace(/\/+$/, '')
-				: undefined
+			transport_url: SERVER_CONTAINER_URL ? SERVER_CONTAINER_URL.replace(/\/+$/, '') : undefined
 		});
 
+		// Load gtag.js script
 		var script = document.createElement('script');
 		script.async = true;
 		var idParam = 'id=' + encodeURIComponent(MEASUREMENT_ID);
 		var layerParam = '&l=' + encodeURIComponent(RELAY_DATALAYER_NAME);
-
 		script.src = (LOAD_GTAG_FROM_SST && SERVER_CONTAINER_URL)
 			? SERVER_CONTAINER_URL.replace(/\/+$/, '') + '/gtag/js?' + idParam + layerParam
 			: 'https://www.googletagmanager.com/gtag/js?' + idParam + layerParam;
-
 		document.head.appendChild(script);
 	}
 
 	/******************************
-	 * PERSISTENT STATE (bounded)
+	 * PERSISTENCE
 	 ******************************/
 	var persistentState = {};
-	var persistentMeta = {}; // { key: lastUpdated }
 
-	function cleanupPersistentState(now) {
-		for (var k in persistentMeta) {
-			if (now - persistentMeta[k] > PERSIST_TTL_MS) {
-				delete persistentMeta[k];
-				delete persistentState[k];
-			}
-		}
-	}
-
-	function enforcePersistentLimit() {
-		var keys = Object.keys(persistentState);
-		if (keys.length <= PERSIST_MAX_KEYS) return;
-
-		keys.sort(function (a, b) {
-			return persistentMeta[a] - persistentMeta[b];
-		});
-
-		while (keys.length > PERSIST_MAX_KEYS) {
-			var oldest = keys.shift();
-			delete persistentState[oldest];
-			delete persistentMeta[oldest];
-		}
-	}
-
+	// UPDATED — now supports prefix groups
 	function updatePersistentState(obj) {
-		var now = Date.now();
-		cleanupPersistentState(now);
-
+		// 1. Save explicit fields first (Original Logic)
 		for (var i = 0; i < PERSISTENT_FIELDS.length; i++) {
 			var explicit = PERSISTENT_FIELDS[i];
 			if (Object.prototype.hasOwnProperty.call(obj, explicit)) {
 				var v = obj[explicit];
 				if (!isEmptyValue(v)) {
 					persistentState[explicit] = v;
-					persistentMeta[explicit] = now;
+					// Restored original logging for explicit fields
+					log('[Persistence] Updated %o = %o', explicit, v);
 				} else {
 					delete persistentState[explicit];
-					delete persistentMeta[explicit];
+					// Restored original logging for clearing explicit fields
+					log('[Persistence] Cleared %o (empty value)', explicit);
 				}
 			}
 		}
 
+		// 2. NEW — capture all keys starting with configured prefixes
 		for (var key in obj) {
 			if (startsWithAny(key, PERSIST_PREFIXES)) {
 				var value = obj[key];
 				if (!isEmptyValue(value)) {
 					persistentState[key] = value;
-					persistentMeta[key] = now;
+					// Use specific logging for prefix fields
+					log('[Persist prefix] Updated %o = %o', key, value);
 				} else {
 					delete persistentState[key];
-					delete persistentMeta[key];
+					log('[Persist prefix] Cleared %o (empty value)', key);
 				}
 			}
 		}
-
-		enforcePersistentLimit();
 	}
 
 	function mergeWithPersistentState(obj) {
-		return Object.keys(persistentState).length
-			? Object.assign({}, persistentState, obj)
-			: obj;
+		// Use original check logic which handles both PERSISTENT_FIELDS and PERSIST_PREFIXES via persistentState
+		if (!Object.keys(persistentState).length) return obj;
+
+		// Create merged object: persistent state + current event
+		var merged = {};
+		for (var key in persistentState) {
+			merged[key] = persistentState[key];
+		}
+		for (var key in obj) {
+			merged[key] = obj[key];
+		}
+		return merged;
 	}
 
 	/******************************
-	 * PARAM SPLITTING
+	 * PARAMETER PROCESSING
 	 ******************************/
 	function splitAndBundleParams(sourceObj) {
 		var topLevel = {};
@@ -237,108 +212,116 @@
 	}
 
 	/******************************
-	 * EVENT QUEUE + ERROR HANDLING
+	 * EVENT PROCESSING
 	 ******************************/
-	var eventStats = { processed: 0, sent: 0, blocked: 0 };
-	var eventQueue = [];
-	var retryQueue = [];
-	var isFlushScheduled = false;
+	var eventStats = {
+		processed: 0,
+		sent: 0,
+		blocked: 0
+	};
 
-	function sendEvent(event) {
-		try {
-			event.params.send_to = MEASUREMENT_ID;
-			window.relay_gtag('event', event.eventName, event.params);
-			eventStats.sent++;
-		} catch (err) {
-			retryQueue.push(event);
-			log('[SST error] gtag failed, queued for retry', err);
-		}
-	}
-
-	function flushEventQueue() {
-		isFlushScheduled = false;
-
-		while (eventQueue.length > 0) {
-			sendEvent(eventQueue.shift());
-		}
-
-		if (retryQueue.length) {
-			var tmp = retryQueue.slice();
-			retryQueue.length = 0;
-			for (var i = 0; i < tmp.length; i++) {
-				sendEvent(tmp[i]);
-			}
-		}
-	}
-
-	function queueEvent(eventName, params) {
-		eventQueue.push({ eventName: eventName, params: params });
-
-		if (!isFlushScheduled) {
-			isFlushScheduled = true;
-			scheduleEvent(flushEventQueue);
-		}
+	function sendEvent(eventName, params) {
+		params.send_to = MEASUREMENT_ID;
+		window.gtag('event', eventName, params);
+		eventStats.sent++;
+		// Restored original detailed logging
+		log('[SST forward] (#%o) gtag("event", %o, %o)', eventStats.sent, eventName, params);
 	}
 
 	function processDataLayerObject(obj) {
 		if (!obj || typeof obj !== 'object') return;
 
+		// Update persistent state from any dataLayer push
 		updatePersistentState(obj);
 
-		if (!Object.prototype.hasOwnProperty.call(obj, 'event')) return;
-
-		eventStats.processed++;
-
-		var eventName = String(obj.event || '').trim();
-		if (!eventName || shouldBlockEventName(eventName)) {
-			eventStats.blocked++;
+		// Only forward objects with an event property
+		if (!Object.prototype.hasOwnProperty.call(obj, 'event')) {
+			// Restored original logging
+			log('[SST process] Data-only push (no event property)');
 			return;
 		}
 
+		eventStats.processed++;
+		var eventName = String(obj.event || '').trim();
+
+		// Block filtered events
+		if (!eventName || shouldBlockEventName(eventName)) {
+			eventStats.blocked++;
+			// Restored original logging
+			log('[SST blocked] Event blocked: %o', eventName);
+			return;
+		}
+
+		// Restored original logging
+		log('[SST process] Processing event #%o: %o', eventStats.processed, eventName);
+
+		// Merge with persistent state and send
 		var mergedObj = mergeWithPersistentState(obj);
 		var params = splitAndBundleParams(mergedObj);
-		queueEvent(eventName, params);
+		sendEvent(eventName, params);
 	}
 
 	/******************************
-	 * DATALAYER INTERCEPT
+	 * DATALAYER INTERCEPTION
 	 ******************************/
 	var dl = window.dataLayer = window.dataLayer || [];
 	var originalPush = dl.push.bind(dl);
 
+	// Intercept dataLayer.push
 	dl.push = function () {
+		// Process and relay events BEFORE adding to dataLayer
 		for (var i = 0; i < arguments.length; i++) {
 			if (arguments[i] && typeof arguments[i] === 'object') {
 				processDataLayerObject(arguments[i]);
 			}
 		}
-		return originalPush.apply(dl, arguments);
+		// Then add to dataLayer for other listeners
+		var result = originalPush.apply(dl, arguments);
+		return result;
 	};
 
+	// Process existing dataLayer entries
 	try {
-		for (var j = 0; j < dl.length; j++) {
-			if (dl[j] && typeof dl[j] === 'object') {
-				processDataLayerObject(dl[j]);
+		for (var i = 0; i < dl.length; i++) {
+			if (dl[i] && typeof dl[i] === 'object') {
+				processDataLayerObject(dl[i]);
 			}
 		}
 	} catch (_) { }
 
 	/******************************
-	 * INIT
+	 * INITIALIZATION
 	 ******************************/
-	log('DLR loaded', RELAY_VERSION);
+	// Restored original initialization logging
+	log('========================================');
+	log('    DataLayer Relay Script Loaded');
+	log('    Version:', RELAY_VERSION);
+	log('    App DataLayer: window.dataLayer');
+	log('    Gtag DataLayer: window.' + RELAY_DATALAYER_NAME);
+	log('    Persistent Fields:', PERSISTENT_FIELDS.length ? PERSISTENT_FIELDS : 'None');
+	log('    Persistent Prefixes:', PERSIST_PREFIXES.join(', ') || 'None'); // Added new logging line
+	log('    Debug Mode:', DEBUG ? 'ON' : 'OFF');
+	log('========================================');
+
 	initializeGtag();
 
+	/******************************
+	 * DEBUG UTILITIES
+	 ******************************/
 	window.dataLayerRelayVersion = RELAY_VERSION;
+	// Restored original debug utility function
 	window.dataLayerRelayStats = function () {
-		return {
-			version: RELAY_VERSION,
-			processed: eventStats.processed,
-			blocked: eventStats.blocked,
-			queued: eventQueue.length,
-			sent: eventStats.sent,
-			persistentKeys: Object.keys(persistentState).length
-		};
+		console.log('========================================');
+		console.log('    DataLayer Relay Statistics');
+		console.log('    Version:', RELAY_VERSION);
+		console.log('----------------------------------------');
+		console.log('    Processed:', eventStats.processed, '(events with event property)');
+		console.log('    Blocked:', eventStats.blocked, '(filtered events)');
+		console.log('    Sent:', eventStats.sent, '(forwarded to SST)');
+		console.log('----------------------------------------');
+		console.log('    Persistent state:', persistentState);
+		console.log('========================================');
+		return eventStats;
 	};
 
 })(window, document);
