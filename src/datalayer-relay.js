@@ -21,7 +21,7 @@
 	/******************************
 	* EVENT PREFIX ALLOWLIST TOGGLE
 	/******************************/
-	var ENABLE_EVENT_PREFIX_ALLOWLIST = true; // default OFF (backward compatible)
+	var ENABLE_EVENT_PREFIX_ALLOWLIST = false; // default OFF (backward compatible)
 
 	var ALLOWED_EVENT_PREFIXES = [
 		'pageView',
@@ -46,7 +46,7 @@
 	var BUNDLED_PARAM_NAME = 'datalayer';
 	var PERSISTENT_FIELDS = [];
 	var RELAY_DATALAYER_NAME = 'relayDL';
-	var RELAY_VERSION = 'v2.6.0-performance-optimization';
+	var RELAY_VERSION = 'v2.6.1';
 
 	// Persistent state limits
 	var PERSIST_MAX_KEYS = 200;
