@@ -1,6 +1,7 @@
 /******************************
  * SST (Server-Side Tagging) Relay Script
- * Optimized version based on Performance Review (Jan 2026)
+ * Optimized + Consent Mode v2 (OneTrust)
+ * v3.0.0 consent-mode
  ******************************/
 
 (function (window, document) {
@@ -12,16 +13,14 @@
 	var MEASUREMENT_ID = '{{GA4_PROPERTY}}';
 	var SERVER_CONTAINER_URL = '{{SERVER_CONTAINER_URL}}';
 	var LOAD_GTAG_FROM_SST = true;
-
-	// Production default
 	var DEBUG = false;
 
 	var BLOCKED_EVENT_PREFIXES = ['gtm.', 'js'];
 
 	/******************************
-	* EVENT PREFIX ALLOWLIST TOGGLE
-	/******************************/
-	var ENABLE_EVENT_PREFIX_ALLOWLIST = false; // default OFF (backward compatible)
+	 * EVENT PREFIX ALLOWLIST
+	 ******************************/
+	var ENABLE_EVENT_PREFIX_ALLOWLIST = false;
 
 	var ALLOWED_EVENT_PREFIXES = [
 		'pageView',
@@ -32,7 +31,6 @@
 		'contentView',
 		'paymentError', 'error'
 	];
-	/******************************/
 
 	var PARAM_DENYLIST = [
 		'send_to', 'eventCallback', 'eventTimeout',
@@ -46,11 +44,16 @@
 	var BUNDLED_PARAM_NAME = 'datalayer';
 	var PERSISTENT_FIELDS = [];
 	var RELAY_DATALAYER_NAME = 'relayDL';
-	var RELAY_VERSION = 'v2.6.1';
+	var RELAY_VERSION = 'v3.0.0';
 
-	// Persistent state limits
 	var PERSIST_MAX_KEYS = 200;
-	var PERSIST_TTL_MS = 30 * 60 * 1000; // 30 minutes
+	var PERSIST_TTL_MS = 30 * 60 * 1000;
+
+	/******************************
+	 * CONSENT STATE
+	 ******************************/
+	var consentInitialized = false;
+	var bufferedEvents = [];
 
 	/******************************
 	 * FAST LOOKUPS
@@ -73,12 +76,7 @@
 		COMMON_GTAG_PARAM_KEYS[COMMON_GTAG_PARAMS[i]] = true;
 	}
 
-	/******************************
-	 * LOGGING (true no-op when DEBUG=false)
-	 ******************************/
-	var log = DEBUG
-		? function () { console.log.apply(console, arguments); }
-		: function () { };
+	var log = DEBUG ? function () { console.log.apply(console, arguments); } : function () { };
 
 	/******************************
 	 * HELPERS
@@ -96,8 +94,8 @@
 	}
 
 	function isEventAllowedByPrefix(eventName) {
-		if (!ENABLE_EVENT_PREFIX_ALLOWLIST) return true;      // toggle OFF → allow all
-		if (!ALLOWED_EVENT_PREFIXES.length) return false;     // toggle ON but empty → allow none
+		if (!ENABLE_EVENT_PREFIX_ALLOWLIST) return true;
+		if (!ALLOWED_EVENT_PREFIXES.length) return false;
 		return startsWithAny(eventName, ALLOWED_EVENT_PREFIXES);
 	}
 
@@ -127,12 +125,71 @@
 		return val === null || val === undefined || val === '';
 	}
 
-	function scheduleEvent(callback) {
+	function scheduleEvent(cb) {
 		if (typeof requestIdleCallback === 'function') {
-			requestIdleCallback(callback, { timeout: 1000 });
+			requestIdleCallback(cb, { timeout: 1000 });
 		} else {
-			setTimeout(callback, 0);
+			setTimeout(cb, 0);
 		}
+	}
+
+	/******************************
+	 * OneTrust → Consent Mode
+	 ******************************/
+	function parseOneTrustGroups(groupStr) {
+		var map = {};
+		if (!groupStr || typeof groupStr !== 'string') return map;
+		var parts = groupStr.split(',');
+		for (var i = 0; i < parts.length; i++) {
+			if (parts[i]) map[parts[i]] = true;
+		}
+		return map;
+	}
+
+	function buildConsentFromOneTrust(groupsStr) {
+		var groups = parseOneTrustGroups(groupsStr);
+		var analyticsGranted = !!groups['C0002'];
+		var adsGranted = !!groups['C0004'];
+
+		return {
+			analytics_storage: analyticsGranted ? 'granted' : 'denied',
+			ad_storage: adsGranted ? 'granted' : 'denied',
+			ad_user_data: adsGranted ? 'granted' : 'denied',
+			ad_personalization: adsGranted ? 'granted' : 'denied'
+		};
+	}
+
+	function flushBufferedEvents() {
+		if (!bufferedEvents.length) return;
+		for (var i = 0; i < bufferedEvents.length; i++) {
+			eventQueue.push(bufferedEvents[i]);
+		}
+		bufferedEvents.length = 0;
+
+		if (!isFlushScheduled) {
+			isFlushScheduled = true;
+			scheduleEvent(flushEventQueue);
+		}
+	}
+
+	function handleOneTrustConsent(obj) {
+		if (!obj || !obj.OnetrustActiveGroups) return false;
+
+		if (obj.event === 'OneTrustLoaded') {
+			var state = buildConsentFromOneTrust(obj.OnetrustActiveGroups);
+			consentInitialized = true;
+			window.relay_gtag('consent', 'default', state);
+			flushBufferedEvents();
+			return true;
+		}
+
+		if (obj.event === 'OneTrustGroupsUpdated') {
+			var updated = buildConsentFromOneTrust(obj.OnetrustActiveGroups);
+			window.relay_gtag('consent', 'update', updated);
+			return true;
+		}
+
+		return false;
 	}
 
 	/******************************
@@ -145,15 +202,15 @@
 		};
 
 		window.relay_gtag('js', new Date());
+
 		window.relay_gtag('config', MEASUREMENT_ID, {
 			send_page_view: false,
-			transport_url: SERVER_CONTAINER_URL
-				? SERVER_CONTAINER_URL.replace(/\/+$/, '')
-				: undefined
+			transport_url: SERVER_CONTAINER_URL ? SERVER_CONTAINER_URL.replace(/\/+$/, '') : undefined
 		});
 
 		var script = document.createElement('script');
 		script.async = true;
+
 		var idParam = 'id=' + encodeURIComponent(MEASUREMENT_ID);
 		var layerParam = '&l=' + encodeURIComponent(RELAY_DATALAYER_NAME);
 
@@ -165,10 +222,10 @@
 	}
 
 	/******************************
-	 * PERSISTENT STATE (bounded)
+	 * PERSISTENT STATE (unchanged)
 	 ******************************/
 	var persistentState = {};
-	var persistentMeta = {}; // { key: lastUpdated }
+	var persistentMeta = {};
 
 	function cleanupPersistentState(now) {
 		for (var k in persistentMeta) {
@@ -197,20 +254,6 @@
 	function updatePersistentState(obj) {
 		var now = Date.now();
 		cleanupPersistentState(now);
-
-		for (var i = 0; i < PERSISTENT_FIELDS.length; i++) {
-			var explicit = PERSISTENT_FIELDS[i];
-			if (Object.prototype.hasOwnProperty.call(obj, explicit)) {
-				var v = obj[explicit];
-				if (!isEmptyValue(v)) {
-					persistentState[explicit] = v;
-					persistentMeta[explicit] = now;
-				} else {
-					delete persistentState[explicit];
-					delete persistentMeta[explicit];
-				}
-			}
-		}
 
 		for (var key in obj) {
 			if (startsWithAny(key, PERSIST_PREFIXES)) {
@@ -260,7 +303,7 @@
 	}
 
 	/******************************
-	 * EVENT QUEUE + ERROR HANDLING
+	 * EVENT QUEUE (buffering added)
 	 ******************************/
 	var eventStats = { processed: 0, sent: 0, blocked: 0 };
 	var eventQueue = [];
@@ -274,14 +317,13 @@
 			eventStats.sent++;
 		} catch (err) {
 			retryQueue.push(event);
-			log('[SST error] gtag failed, queued for retry', err);
 		}
 	}
 
 	function flushEventQueue() {
 		isFlushScheduled = false;
 
-		while (eventQueue.length > 0) {
+		while (eventQueue.length) {
 			sendEvent(eventQueue.shift());
 		}
 
@@ -295,6 +337,11 @@
 	}
 
 	function queueEvent(eventName, params) {
+		if (!consentInitialized) {
+			bufferedEvents.push({ eventName: eventName, params: params });
+			return;
+		}
+
 		eventQueue.push({ eventName: eventName, params: params });
 
 		if (!isFlushScheduled) {
@@ -305,6 +352,8 @@
 
 	function processDataLayerObject(obj) {
 		if (!obj || typeof obj !== 'object') return;
+
+		if (handleOneTrustConsent(obj)) return;
 
 		updatePersistentState(obj);
 
@@ -350,16 +399,19 @@
 	/******************************
 	 * INIT
 	 ******************************/
-	log('DLR loaded', RELAY_VERSION);
 	initializeGtag();
 
-	/******************************
-	 * DEBUG
-	 ******************************/
 	window.dataLayerRelayVersion = RELAY_VERSION;
 	window.dataLayerRelayStats = function () {
-		console.table(eventStats);
-		return eventStats;
+		return {
+			version: RELAY_VERSION,
+			processed: eventStats.processed,
+			blocked: eventStats.blocked,
+			sent: eventStats.sent,
+			queued: eventQueue.length,
+			buffered: bufferedEvents.length,
+			consentInitialized: consentInitialized
+		};
 	};
 
 })(window, document);
