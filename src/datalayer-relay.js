@@ -48,11 +48,13 @@
 
 	var PERSIST_MAX_KEYS = 200;
 	var PERSIST_TTL_MS = 30 * 60 * 1000;
+	var CONSENT_TIMEOUT_MS = 4000; // 4s fallback
 
 	/******************************
 	 * CONSENT STATE
 	 ******************************/
 	var consentInitialized = false;
+	var consentTimeoutTimer = null;
 	var bufferedEvents = [];
 
 	/******************************
@@ -127,9 +129,9 @@
 
 	function scheduleEvent(cb) {
 		if (typeof requestIdleCallback === 'function') {
-			requestIdleCallback(cb, { timeout: 1000 });
+			requestIdleCallback(cb, { timeout: 2000 });
 		} else {
-			setTimeout(cb, 0);
+			setTimeout(cb, 1);
 		}
 	}
 
@@ -175,9 +177,12 @@
 	function handleOneTrustConsent(obj) {
 		if (!obj || !obj.OnetrustActiveGroups) return false;
 
+		// If we already timed out or initialized, we treat this as an update unless it's the load event
 		if (obj.event === 'OneTrustLoaded') {
 			var state = buildConsentFromOneTrust(obj.OnetrustActiveGroups);
 			consentInitialized = true;
+			if (consentTimeoutTimer) clearTimeout(consentTimeoutTimer);
+
 			window.relay_gtag('consent', 'default', state);
 			flushBufferedEvents();
 			return true;
@@ -190,6 +195,20 @@
 		}
 
 		return false;
+	}
+
+	function forceConsentDefault() {
+		if (consentInitialized) return;
+		log('Consent initialization timed out. Defaulting to denied.');
+		consentInitialized = true;
+		// Default to denied if OneTrust fails to load
+		window.relay_gtag('consent', 'default', {
+			analytics_storage: 'denied',
+			ad_storage: 'denied',
+			ad_user_data: 'denied',
+			ad_personalization: 'denied'
+		});
+		flushBufferedEvents();
 	}
 
 	/******************************
@@ -207,6 +226,9 @@
 			send_page_view: false,
 			transport_url: SERVER_CONTAINER_URL ? SERVER_CONTAINER_URL.replace(/\/+$/, '') : undefined
 		});
+
+		// Start fail-safe timer
+		consentTimeoutTimer = setTimeout(forceConsentDefault, CONSENT_TIMEOUT_MS);
 
 		var script = document.createElement('script');
 		script.async = true;
@@ -322,16 +344,28 @@
 
 	function flushEventQueue() {
 		isFlushScheduled = false;
+		var deadline = performance.now() + 15; // 15ms time slice budget
 
-		while (eventQueue.length) {
+		while (eventQueue.length > 0) {
+			if (performance.now() > deadline) {
+				// Yield to main thread and resume later
+				scheduleEvent(flushEventQueue);
+				return;
+			}
 			sendEvent(eventQueue.shift());
 		}
 
-		if (retryQueue.length) {
-			var tmp = retryQueue.slice();
-			retryQueue.length = 0;
-			for (var i = 0; i < tmp.length; i++) {
-				sendEvent(tmp[i]);
+		// If we have retries and the main queue is empty, move some retries back
+		// to the main queue to be processed in the NEXT time slice / tick.
+		if (retryQueue.length > 0) {
+			// Take a batch of retries (e.g., up to 10)
+			var batch = retryQueue.splice(0, 10);
+			for (var i = 0; i < batch.length; i++) {
+				eventQueue.push(batch[i]);
+			}
+			// Schedule processing for these retried events
+			if (eventQueue.length > 0) {
+				scheduleEvent(flushEventQueue);
 			}
 		}
 	}
@@ -381,8 +415,12 @@
 
 	dl.push = function () {
 		for (var i = 0; i < arguments.length; i++) {
-			if (arguments[i] && typeof arguments[i] === 'object') {
-				processDataLayerObject(arguments[i]);
+			try {
+				if (arguments[i] && typeof arguments[i] === 'object') {
+					processDataLayerObject(arguments[i]);
+				}
+			} catch (e) {
+				log('Error processing DL object', e);
 			}
 		}
 		return originalPush.apply(dl, arguments);
