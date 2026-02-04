@@ -1,7 +1,7 @@
 /******************************
  * SST (Server-Side Tagging) Relay Script
  * Optimized + Consent Mode v2 (OneTrust)
- * v3.0.0 consent-mode
+ * v3.1.0 consent-mode
  ******************************/
 
 (function (window, document) {
@@ -44,18 +44,31 @@
 	var BUNDLED_PARAM_NAME = 'datalayer';
 	var PERSISTENT_FIELDS = [];
 	var RELAY_DATALAYER_NAME = 'relayDL';
-	var RELAY_VERSION = 'v3.0.0';
+	var RELAY_VERSION = 'v3.1.0';
 
 	var PERSIST_MAX_KEYS = 200;
 	var PERSIST_TTL_MS = 30 * 60 * 1000;
-	var CONSENT_TIMEOUT_MS = 4000; // 4s fallback
 
 	/******************************
-	 * CONSENT STATE
+	 * CONSENT CONFIG
 	 ******************************/
-	var consentInitialized = false;
-	var consentTimeoutTimer = null;
-	var bufferedEvents = [];
+	// Default consent state to use if OneTrust is slow/unavailable
+	// Standard: 'denied' for compliance, 'granted' if implicit.
+	var DEFAULT_CONSENT_STATE = {
+		analytics_storage: 'denied',
+		ad_storage: 'denied',
+		ad_user_data: 'denied',
+		ad_personalization: 'denied'
+	};
+
+	// Optional: data redaction settings
+	var DATA_REDACTION_SETTINGS = {
+		ads_data_redaction: true
+	};
+
+	// Time (ms) to wait for OneTrust update before firing events with 'denied' default.
+	// Prevents "Flash of Denied" for returning users.
+	var CONSENT_WAIT_FOR_UPDATE_MS = 1000;
 
 	/******************************
 	 * FAST LOOKUPS
@@ -129,9 +142,9 @@
 
 	function scheduleEvent(cb) {
 		if (typeof requestIdleCallback === 'function') {
-			requestIdleCallback(cb, { timeout: 2000 });
+			requestIdleCallback(cb, { timeout: 1000 });
 		} else {
-			setTimeout(cb, 1);
+			setTimeout(cb, 0);
 		}
 	}
 
@@ -161,54 +174,18 @@
 		};
 	}
 
-	function flushBufferedEvents() {
-		if (!bufferedEvents.length) return;
-		for (var i = 0; i < bufferedEvents.length; i++) {
-			eventQueue.push(bufferedEvents[i]);
-		}
-		bufferedEvents.length = 0;
-
-		if (!isFlushScheduled) {
-			isFlushScheduled = true;
-			scheduleEvent(flushEventQueue);
-		}
-	}
-
 	function handleOneTrustConsent(obj) {
 		if (!obj || !obj.OnetrustActiveGroups) return false;
 
-		// If we already timed out or initialized, we treat this as an update unless it's the load event
-		if (obj.event === 'OneTrustLoaded') {
+		// When OneTrust loads or updates, we issue an UPDATE.
+		// The DEFAULT is already set at initialization.
+		if (obj.event === 'OneTrustLoaded' || obj.event === 'OneTrustGroupsUpdated') {
 			var state = buildConsentFromOneTrust(obj.OnetrustActiveGroups);
-			consentInitialized = true;
-			if (consentTimeoutTimer) clearTimeout(consentTimeoutTimer);
-
-			window.relay_gtag('consent', 'default', state);
-			flushBufferedEvents();
-			return true;
-		}
-
-		if (obj.event === 'OneTrustGroupsUpdated') {
-			var updated = buildConsentFromOneTrust(obj.OnetrustActiveGroups);
-			window.relay_gtag('consent', 'update', updated);
+			window.relay_gtag('consent', 'update', state);
 			return true;
 		}
 
 		return false;
-	}
-
-	function forceConsentDefault() {
-		if (consentInitialized) return;
-		log('Consent initialization timed out. Defaulting to denied.');
-		consentInitialized = true;
-		// Default to denied if OneTrust fails to load
-		window.relay_gtag('consent', 'default', {
-			analytics_storage: 'denied',
-			ad_storage: 'denied',
-			ad_user_data: 'denied',
-			ad_personalization: 'denied'
-		});
-		flushBufferedEvents();
 	}
 
 	/******************************
@@ -220,15 +197,24 @@
 			window[RELAY_DATALAYER_NAME].push(arguments);
 		};
 
+		// 1. Set Default Consent immediately (Prevents blocking)
+		// We mix in wait_for_update to handle returning users gracefully
+		var consentConfig = Object.assign({}, DEFAULT_CONSENT_STATE, {
+			wait_for_update: CONSENT_WAIT_FOR_UPDATE_MS
+		});
+
+		window.relay_gtag('consent', 'default', consentConfig);
+
+		if (DATA_REDACTION_SETTINGS) {
+			window.relay_gtag('set', 'ads_data_redaction', DATA_REDACTION_SETTINGS.ads_data_redaction);
+		}
+
 		window.relay_gtag('js', new Date());
 
 		window.relay_gtag('config', MEASUREMENT_ID, {
 			send_page_view: false,
 			transport_url: SERVER_CONTAINER_URL ? SERVER_CONTAINER_URL.replace(/\/+$/, '') : undefined
 		});
-
-		// Start fail-safe timer
-		consentTimeoutTimer = setTimeout(forceConsentDefault, CONSENT_TIMEOUT_MS);
 
 		var script = document.createElement('script');
 		script.async = true;
@@ -344,38 +330,22 @@
 
 	function flushEventQueue() {
 		isFlushScheduled = false;
-		var deadline = performance.now() + 15; // 15ms time slice budget
 
-		while (eventQueue.length > 0) {
-			if (performance.now() > deadline) {
-				// Yield to main thread and resume later
-				scheduleEvent(flushEventQueue);
-				return;
-			}
+		while (eventQueue.length) {
 			sendEvent(eventQueue.shift());
 		}
 
-		// If we have retries and the main queue is empty, move some retries back
-		// to the main queue to be processed in the NEXT time slice / tick.
-		if (retryQueue.length > 0) {
-			// Take a batch of retries (e.g., up to 10)
-			var batch = retryQueue.splice(0, 10);
-			for (var i = 0; i < batch.length; i++) {
-				eventQueue.push(batch[i]);
-			}
-			// Schedule processing for these retried events
-			if (eventQueue.length > 0) {
-				scheduleEvent(flushEventQueue);
+		if (retryQueue.length) {
+			var tmp = retryQueue.slice();
+			retryQueue.length = 0;
+			for (var i = 0; i < tmp.length; i++) {
+				sendEvent(tmp[i]);
 			}
 		}
 	}
 
 	function queueEvent(eventName, params) {
-		if (!consentInitialized) {
-			bufferedEvents.push({ eventName: eventName, params: params });
-			return;
-		}
-
+		// No buffering needed -> Default consent is active
 		eventQueue.push({ eventName: eventName, params: params });
 
 		if (!isFlushScheduled) {
@@ -415,12 +385,8 @@
 
 	dl.push = function () {
 		for (var i = 0; i < arguments.length; i++) {
-			try {
-				if (arguments[i] && typeof arguments[i] === 'object') {
-					processDataLayerObject(arguments[i]);
-				}
-			} catch (e) {
-				log('Error processing DL object', e);
+			if (arguments[i] && typeof arguments[i] === 'object') {
+				processDataLayerObject(arguments[i]);
 			}
 		}
 		return originalPush.apply(dl, arguments);
@@ -446,9 +412,7 @@
 			processed: eventStats.processed,
 			blocked: eventStats.blocked,
 			sent: eventStats.sent,
-			queued: eventQueue.length,
-			buffered: bufferedEvents.length,
-			consentInitialized: consentInitialized
+			queued: eventQueue.length
 		};
 	};
 
