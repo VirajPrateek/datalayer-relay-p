@@ -12,7 +12,7 @@
 	var MEASUREMENT_ID = '{{GA4_PROPERTY}}';
 	var SERVER_CONTAINER_URL = '{{SERVER_CONTAINER_URL}}';
 	var LOAD_GTAG_FROM_SST = true;
-	var RELAY_VERSION = 'dlr-vanilla-v2.6.1'; // Update to 'dlr-sitecore-v2.6.1' for Sitecore build
+	var RELAY_VERSION = 'dlr-sitecore-v2.6.1'; // Update to 'dlr-vanilla-v2.6.1' for Vanilla build
 
 	// Production default
 	var DEBUG = false;
