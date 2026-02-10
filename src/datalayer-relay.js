@@ -12,6 +12,7 @@
 	var MEASUREMENT_ID = '{{GA4_PROPERTY}}';
 	var SERVER_CONTAINER_URL = '{{SERVER_CONTAINER_URL}}';
 	var LOAD_GTAG_FROM_SST = true;
+	var RELAY_VERSION = 'dlr-vanilla-v2.6.1'; // Update to 'dlr-sitecore-v2.6.1' for Sitecore build
 
 	// Production default
 	var DEBUG = false;
@@ -46,7 +47,7 @@
 	var BUNDLED_PARAM_NAME = 'datalayer';
 	var PERSISTENT_FIELDS = [];
 	var RELAY_DATALAYER_NAME = 'relayDL';
-	var RELAY_VERSION = 'v2.6.1';
+
 
 	// Persistent state limits
 	var PERSIST_MAX_KEYS = 200;
@@ -149,7 +150,8 @@
 			send_page_view: false,
 			transport_url: SERVER_CONTAINER_URL
 				? SERVER_CONTAINER_URL.replace(/\/+$/, '')
-				: undefined
+				: undefined,
+			relay_version: RELAY_VERSION
 		});
 
 		var script = document.createElement('script');
