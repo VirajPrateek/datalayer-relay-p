@@ -1,6 +1,7 @@
 /******************************
  * SST (Server-Side Tagging) Relay Script
  * Optimized version based on Performance Review (Jan 2026)
+ * Cookie consent handled in this version
  ******************************/
 
 (function (window, document) {
@@ -47,7 +48,7 @@
 	var BUNDLED_PARAM_NAME = 'datalayer';
 	var PERSISTENT_FIELDS = [];
 	var RELAY_DATALAYER_NAME = 'relayDL';
-
+	var RELAY_VERSION = 'dlr-vanilla-v3.1.1'; //consentmode without buffer and timer
 
 	// Persistent state limits
 	var PERSIST_MAX_KEYS = 200;
@@ -97,8 +98,8 @@
 	}
 
 	function isEventAllowedByPrefix(eventName) {
-		if (!ENABLE_EVENT_PREFIX_ALLOWLIST) return true;      // toggle OFF → allow all
-		if (!ALLOWED_EVENT_PREFIXES.length) return false;     // toggle ON but empty → allow none
+		if (!ENABLE_EVENT_PREFIX_ALLOWLIST) return true;
+		if (!ALLOWED_EVENT_PREFIXES.length) return false;
 		return startsWithAny(eventName, ALLOWED_EVENT_PREFIXES);
 	}
 
@@ -134,6 +135,52 @@
 		} else {
 			setTimeout(callback, 0);
 		}
+	}
+
+	/******************************
+	 * CONSENT HANDLING (NON-BLOCKING)
+	 ******************************/
+	function parseOneTrustGroups(groupStr) {
+		var map = {};
+		if (!groupStr || typeof groupStr !== 'string') return map;
+		var parts = groupStr.split(',');
+		for (var i = 0; i < parts.length; i++) {
+			if (parts[i]) map[parts[i]] = true;
+		}
+		return map;
+	}
+
+	function buildConsentFromOneTrust(groupsStr) {
+		var groups = parseOneTrustGroups(groupsStr);
+		var analyticsGranted = !!groups['C0002'];
+		var adsGranted = !!groups['C0004'];
+
+		return {
+			analytics_storage: analyticsGranted ? 'granted' : 'denied',
+			ad_storage: adsGranted ? 'granted' : 'denied',
+			ad_user_data: adsGranted ? 'granted' : 'denied',
+			ad_personalization: adsGranted ? 'granted' : 'denied'
+		};
+	}
+
+	function handleOneTrustConsent(obj) {
+		if (!obj || !obj.OnetrustActiveGroups) return false;
+
+		if (obj.event === 'OneTrustLoaded') {
+			var state = buildConsentFromOneTrust(obj.OnetrustActiveGroups);
+			window.relay_gtag('consent', 'default', state);
+			log('[DLR] Consent default applied');
+			return true;
+		}
+
+		if (obj.event === 'OneTrustGroupsUpdated') {
+			var updated = buildConsentFromOneTrust(obj.OnetrustActiveGroups);
+			window.relay_gtag('consent', 'update', updated);
+			log('[DLR] Consent updated');
+			return true;
+		}
+
+		return false;
 	}
 
 	/******************************
@@ -307,6 +354,8 @@
 
 	function processDataLayerObject(obj) {
 		if (!obj || typeof obj !== 'object') return;
+
+		if (handleOneTrustConsent(obj)) return;
 
 		updatePersistentState(obj);
 
