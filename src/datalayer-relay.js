@@ -1,7 +1,7 @@
 /******************************
  * SST (Server-Side Tagging) Relay Script
- * Optimized + Consent Mode v2 (OneTrust)
- * v3.1.0 consent-mode
+ * Optimized version based on Performance Review (Jan 2026)
+ * Cookie consent handled in this version
  ******************************/
 
 (function (window, document) {
@@ -13,14 +13,16 @@
 	var MEASUREMENT_ID = '{{GA4_PROPERTY}}';
 	var SERVER_CONTAINER_URL = '{{SERVER_CONTAINER_URL}}';
 	var LOAD_GTAG_FROM_SST = true;
+
+	// Production default
 	var DEBUG = false;
 
 	var BLOCKED_EVENT_PREFIXES = ['gtm.', 'js'];
 
 	/******************************
-	 * EVENT PREFIX ALLOWLIST
-	 ******************************/
-	var ENABLE_EVENT_PREFIX_ALLOWLIST = false;
+	* EVENT PREFIX ALLOWLIST TOGGLE
+	/******************************/
+	var ENABLE_EVENT_PREFIX_ALLOWLIST = false; // default OFF (backward compatible)
 
 	var ALLOWED_EVENT_PREFIXES = [
 		'pageView',
@@ -31,6 +33,7 @@
 		'contentView',
 		'paymentError', 'error'
 	];
+	/******************************/
 
 	var PARAM_DENYLIST = [
 		'send_to', 'eventCallback', 'eventTimeout',
@@ -44,31 +47,11 @@
 	var BUNDLED_PARAM_NAME = 'datalayer';
 	var PERSISTENT_FIELDS = [];
 	var RELAY_DATALAYER_NAME = 'relayDL';
-	var RELAY_VERSION = 'v3.1.0';
+	var RELAY_VERSION = 'dlr-vanilla-v3.1.1'; //consentmode without buffer and timer
 
+	// Persistent state limits
 	var PERSIST_MAX_KEYS = 200;
-	var PERSIST_TTL_MS = 30 * 60 * 1000;
-
-	/******************************
-	 * CONSENT CONFIG
-	 ******************************/
-	// Default consent state to use if OneTrust is slow/unavailable
-	// Standard: 'denied' for compliance, 'granted' if implicit.
-	var DEFAULT_CONSENT_STATE = {
-		analytics_storage: 'denied',
-		ad_storage: 'denied',
-		ad_user_data: 'denied',
-		ad_personalization: 'denied'
-	};
-
-	// Optional: data redaction settings
-	var DATA_REDACTION_SETTINGS = {
-		ads_data_redaction: true
-	};
-
-	// Time (ms) to wait for OneTrust update before firing events with 'denied' default.
-	// Prevents "Flash of Denied" for returning users.
-	var CONSENT_WAIT_FOR_UPDATE_MS = 1000;
+	var PERSIST_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 	/******************************
 	 * FAST LOOKUPS
@@ -91,7 +74,12 @@
 		COMMON_GTAG_PARAM_KEYS[COMMON_GTAG_PARAMS[i]] = true;
 	}
 
-	var log = DEBUG ? function () { console.log.apply(console, arguments); } : function () { };
+	/******************************
+	 * LOGGING (true no-op when DEBUG=false)
+	 ******************************/
+	var log = DEBUG
+		? function () { console.log.apply(console, arguments); }
+		: function () { };
 
 	/******************************
 	 * HELPERS
@@ -140,16 +128,16 @@
 		return val === null || val === undefined || val === '';
 	}
 
-	function scheduleEvent(cb) {
+	function scheduleEvent(callback) {
 		if (typeof requestIdleCallback === 'function') {
-			requestIdleCallback(cb, { timeout: 1000 });
+			requestIdleCallback(callback, { timeout: 1000 });
 		} else {
-			setTimeout(cb, 0);
+			setTimeout(callback, 0);
 		}
 	}
 
 	/******************************
-	 * OneTrust → Consent Mode
+	 * CONSENT HANDLING (NON-BLOCKING)
 	 ******************************/
 	function parseOneTrustGroups(groupStr) {
 		var map = {};
@@ -177,11 +165,17 @@
 	function handleOneTrustConsent(obj) {
 		if (!obj || !obj.OnetrustActiveGroups) return false;
 
-		// When OneTrust loads or updates, we issue an UPDATE.
-		// The DEFAULT is already set at initialization.
-		if (obj.event === 'OneTrustLoaded' || obj.event === 'OneTrustGroupsUpdated') {
+		if (obj.event === 'OneTrustLoaded') {
 			var state = buildConsentFromOneTrust(obj.OnetrustActiveGroups);
-			window.relay_gtag('consent', 'update', state);
+			window.relay_gtag('consent', 'default', state);
+			log('[DLR] Consent default applied');
+			return true;
+		}
+
+		if (obj.event === 'OneTrustGroupsUpdated') {
+			var updated = buildConsentFromOneTrust(obj.OnetrustActiveGroups);
+			window.relay_gtag('consent', 'update', updated);
+			log('[DLR] Consent updated');
 			return true;
 		}
 
@@ -197,28 +191,16 @@
 			window[RELAY_DATALAYER_NAME].push(arguments);
 		};
 
-		// 1. Set Default Consent immediately (Prevents blocking)
-		// We mix in wait_for_update to handle returning users gracefully
-		var consentConfig = Object.assign({}, DEFAULT_CONSENT_STATE, {
-			wait_for_update: CONSENT_WAIT_FOR_UPDATE_MS
-		});
-
-		window.relay_gtag('consent', 'default', consentConfig);
-
-		if (DATA_REDACTION_SETTINGS) {
-			window.relay_gtag('set', 'ads_data_redaction', DATA_REDACTION_SETTINGS.ads_data_redaction);
-		}
-
 		window.relay_gtag('js', new Date());
-
 		window.relay_gtag('config', MEASUREMENT_ID, {
 			send_page_view: false,
-			transport_url: SERVER_CONTAINER_URL ? SERVER_CONTAINER_URL.replace(/\/+$/, '') : undefined
+			transport_url: SERVER_CONTAINER_URL
+				? SERVER_CONTAINER_URL.replace(/\/+$/, '')
+				: undefined
 		});
 
 		var script = document.createElement('script');
 		script.async = true;
-
 		var idParam = 'id=' + encodeURIComponent(MEASUREMENT_ID);
 		var layerParam = '&l=' + encodeURIComponent(RELAY_DATALAYER_NAME);
 
@@ -230,10 +212,10 @@
 	}
 
 	/******************************
-	 * PERSISTENT STATE (unchanged)
+	 * PERSISTENT STATE (bounded)
 	 ******************************/
 	var persistentState = {};
-	var persistentMeta = {};
+	var persistentMeta = {}; // { key: lastUpdated }
 
 	function cleanupPersistentState(now) {
 		for (var k in persistentMeta) {
@@ -262,6 +244,20 @@
 	function updatePersistentState(obj) {
 		var now = Date.now();
 		cleanupPersistentState(now);
+
+		for (var i = 0; i < PERSISTENT_FIELDS.length; i++) {
+			var explicit = PERSISTENT_FIELDS[i];
+			if (Object.prototype.hasOwnProperty.call(obj, explicit)) {
+				var v = obj[explicit];
+				if (!isEmptyValue(v)) {
+					persistentState[explicit] = v;
+					persistentMeta[explicit] = now;
+				} else {
+					delete persistentState[explicit];
+					delete persistentMeta[explicit];
+				}
+			}
+		}
 
 		for (var key in obj) {
 			if (startsWithAny(key, PERSIST_PREFIXES)) {
@@ -311,7 +307,7 @@
 	}
 
 	/******************************
-	 * EVENT QUEUE (buffering added)
+	 * EVENT QUEUE + ERROR HANDLING
 	 ******************************/
 	var eventStats = { processed: 0, sent: 0, blocked: 0 };
 	var eventQueue = [];
@@ -325,13 +321,14 @@
 			eventStats.sent++;
 		} catch (err) {
 			retryQueue.push(event);
+			log('[SST error] gtag failed, queued for retry', err);
 		}
 	}
 
 	function flushEventQueue() {
 		isFlushScheduled = false;
 
-		while (eventQueue.length) {
+		while (eventQueue.length > 0) {
 			sendEvent(eventQueue.shift());
 		}
 
@@ -345,7 +342,6 @@
 	}
 
 	function queueEvent(eventName, params) {
-		// No buffering needed -> Default consent is active
 		eventQueue.push({ eventName: eventName, params: params });
 
 		if (!isFlushScheduled) {
@@ -403,17 +399,16 @@
 	/******************************
 	 * INIT
 	 ******************************/
+	log('DLR loaded', RELAY_VERSION);
 	initializeGtag();
 
+	/******************************
+	 * DEBUG
+	 ******************************/
 	window.dataLayerRelayVersion = RELAY_VERSION;
 	window.dataLayerRelayStats = function () {
-		return {
-			version: RELAY_VERSION,
-			processed: eventStats.processed,
-			blocked: eventStats.blocked,
-			sent: eventStats.sent,
-			queued: eventQueue.length
-		};
+		console.table(eventStats);
+		return eventStats;
 	};
 
 })(window, document);
