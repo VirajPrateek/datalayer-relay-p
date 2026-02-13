@@ -9,10 +9,10 @@
 	/******************************
 	 * CONFIG
 	 ******************************/
-	var MEASUREMENT_ID = '{{GA4_PROPERTY}}';
-	var SERVER_CONTAINER_URL = '{{SERVER_CONTAINER_URL}}';
+	var MEASUREMENT_ID = 'G-M59XDSPFYX';
+	var SERVER_CONTAINER_URL = 'https://sst.sportingbet.bet.br';
 	var LOAD_GTAG_FROM_SST = true;
-	var RELAY_VERSION = 'dlr-sitecore-v2.6.1'; // Update to 'dlr-vanilla-v2.6.1' for Vanilla build
+	var RELAY_VERSION = 'dlr-vanilla-v2.7.0'; // perfomance optmized + sst dependency fix
 
 	// Production default
 	var DEBUG = false;
@@ -156,14 +156,36 @@
 
 		var script = document.createElement('script');
 		script.async = true;
+
 		var idParam = 'id=' + encodeURIComponent(MEASUREMENT_ID);
 		var layerParam = '&l=' + encodeURIComponent(RELAY_DATALAYER_NAME);
 
-		script.src = (LOAD_GTAG_FROM_SST && SERVER_CONTAINER_URL)
-			? SERVER_CONTAINER_URL.replace(/\/+$/, '') + '/gtag/js?' + idParam + layerParam
-			: 'https://www.googletagmanager.com/gtag/js?' + idParam + layerParam;
+		var sstSrc = SERVER_CONTAINER_URL.replace(/\/+$/, '') +
+			'/gtag/js?' + idParam + layerParam;
 
-		document.head.appendChild(script);
+		var googleSrc =
+			'https://www.googletagmanager.com/gtag/js?' +
+			idParam + layerParam;
+
+		var fallbackTriggered = false;
+
+		script.onerror = function () {
+			if (fallbackTriggered) return;
+			fallbackTriggered = true;
+
+			console.warn('[DLR] SST gtag load failed. Falling back to Google CDN.');
+
+			var fallbackScript = document.createElement('script');
+			fallbackScript.async = true;
+			fallbackScript.src = googleSrc;
+			document.body.appendChild(fallbackScript);
+		};
+
+		script.src = (LOAD_GTAG_FROM_SST && SERVER_CONTAINER_URL)
+			? sstSrc
+			: googleSrc;
+
+		document.body.appendChild(script);
 	}
 
 	/******************************
