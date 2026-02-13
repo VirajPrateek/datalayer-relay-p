@@ -12,7 +12,8 @@
 	var MEASUREMENT_ID = '{{GA4_PROPERTY}}';
 	var SERVER_CONTAINER_URL = '{{SERVER_CONTAINER_URL}}';
 	var LOAD_GTAG_FROM_SST = true;
-	var RELAY_VERSION = 'dlr-vanilla-v2.7.0'; // perfomance optmized + sst dependency fix
+	var DELAY_GTAG_LOAD_MS = 2000;
+	var RELAY_VERSION = 'dlr-vanilla-v2.7.1'; // perfomance optmized + sst dependency fix
 
 	// Production default
 	var DEBUG = false;
@@ -47,7 +48,6 @@
 	var BUNDLED_PARAM_NAME = 'datalayer';
 	var PERSISTENT_FIELDS = [];
 	var RELAY_DATALAYER_NAME = 'relayDL';
-
 
 	// Persistent state limits
 	var PERSIST_MAX_KEYS = 200;
@@ -172,20 +172,25 @@
 		script.onerror = function () {
 			if (fallbackTriggered) return;
 			fallbackTriggered = true;
-
-			console.warn('[DLR] SST gtag load failed. Falling back to Google CDN.');
-
+			if (DEBUG) {
+				console.warn('[DLR] SST gtag load failed. Falling back to Google CDN.');
+			}
 			var fallbackScript = document.createElement('script');
 			fallbackScript.async = true;
 			fallbackScript.src = googleSrc;
-			document.body.appendChild(fallbackScript);
+			setTimeout(function () {
+				document.body.appendChild(fallbackScript);
+			}, DELAY_GTAG_LOAD_MS);
 		};
 
 		script.src = (LOAD_GTAG_FROM_SST && SERVER_CONTAINER_URL)
 			? sstSrc
 			: googleSrc;
 
-		document.body.appendChild(script);
+		setTimeout(function () {
+			document.body.appendChild(script);
+		}, DELAY_GTAG_LOAD_MS);
+
 	}
 
 	/******************************
