@@ -11,9 +11,9 @@
 	 ******************************/
 	var MEASUREMENT_ID = '{{GA4_PROPERTY}}';
 	var SERVER_CONTAINER_URL = '{{SERVER_CONTAINER_URL}}';
-	var LOAD_GTAG_FROM_SST = true;
+	var LOAD_GTAG_FROM_SST = false;
 	var DELAY_GTAG_LOAD_MS = 2000;
-	var RELAY_VERSION = 'dlr-vanilla-v2.7.1'; // perfomance optmized + sst dependency fix
+	var RELAY_VERSION = 'dlr-vanilla-v2.7.2'; // perfomance optmized + sst dependency fix
 
 	// Production default
 	var DEBUG = false;
