@@ -14,33 +14,40 @@
 	var SERVER_CONTAINER_URL = '{{SERVER_CONTAINER_URL}}';
 	var LOAD_GTAG_FROM_SST = false;
 	var DELAY_GTAG_LOAD_MS = 2000;
-	var RELAY_VERSION = 'dlr-vanilla-v3.3.0'; // removed allowlist, added exact blocklist
+	var RELAY_VERSION = 'dlr-vanilla-v3.3.1'; // removed allowlist, added exact blocklist
 
 	// Production default
 	var DEBUG = false;
 
 	var BLOCKED_EVENT_PREFIXES = ['gtm.', 'js'];
 	
-	var BLOCKED_EVENT_EXACT = [
-		'view_item',
-		'add_to_cart',
-		'select_item-NR',
-		'view_item_list-NR',
-		'view_item_list-Mar',
-		'begin_checkout',
-		'purchase',
-		'Event.docSubmit',
-		'OneTrustLoaded',
-		'OptanonLoaded',
-		'OneTrustGroupsUpdated',
-		'gtm_consent_default'
-	];
+	// Convert to object for O(1) lookup performance
+	var BLOCKED_EVENT_EXACT = {
+		'view_item': true,
+		'add_to_cart': true,
+		'select_item-NR': true,
+		'view_item_list-NR': true,
+		'view_item_list-Mar': true,
+		'begin_checkout': true,
+		'purchase': true,
+		'Event.docSubmit': true,
+		'OneTrustLoaded': true,
+		'OptanonLoaded': true,
+		'OneTrustGroupsUpdated': true,
+		'gtm_consent_default': true
+	};
 
-	var PARAM_DENYLIST = [
-		'send_to', 'eventCallback', 'eventTimeout',
-		'gtm.uniqueEventId', 'gtm.start', 'gtm.element',
-		'gtm.elementText', 'gtm.elementId'
-	];
+	// Convert to object for O(1) lookup performance
+	var PARAM_DENYLIST = {
+		'send_to': true,
+		'eventCallback': true,
+		'eventTimeout': true,
+		'gtm.uniqueEventId': true,
+		'gtm.start': true,
+		'gtm.element': true,
+		'gtm.elementText': true,
+		'gtm.elementId': true
+	};
 	var PARAM_DENY_PREFIXES = ['gtm'];
 
 	var PERSIST_PREFIXES = ['browser.', 'page.', 'user.', 'device.', 'native.'];
@@ -94,14 +101,14 @@
 
 	function shouldBlockEventName(eventName) {
 		var name = String(eventName || '');
-		// Check exact matches first
-		if (BLOCKED_EVENT_EXACT.indexOf(name) > -1) return true;
+		// Check exact matches first (O(1) lookup)
+		if (BLOCKED_EVENT_EXACT[name]) return true;
 		// Then check prefixes
 		return startsWithAny(name, BLOCKED_EVENT_PREFIXES);
 	}
 
 	function shouldDropParamKey(key) {
-		return PARAM_DENYLIST.indexOf(key) > -1 || startsWithAny(key, PARAM_DENY_PREFIXES);
+		return PARAM_DENYLIST[key] || startsWithAny(key, PARAM_DENY_PREFIXES);
 	}
 
 	function safeStringify(obj) {
