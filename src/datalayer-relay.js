@@ -14,12 +14,26 @@
 	var SERVER_CONTAINER_URL = '{{SERVER_CONTAINER_URL}}';
 	var LOAD_GTAG_FROM_SST = false;
 	var DELAY_GTAG_LOAD_MS = 2000;
-	var RELAY_VERSION = 'dlr-vanilla-v3.2.2'; // consent mode + sst dependency fix
+	var RELAY_VERSION = 'dlr-vanilla-v3.2.3'; // consent mode + sst dependency fix + addtional blocklist
 
 	// Production default
 	var DEBUG = false;
 
-	var BLOCKED_EVENT_PREFIXES = ['gtm.', 'js'];
+	var BLOCKED_EVENT_PREFIXES = [
+		'gtm.', 'js',
+		'view_item',
+		'add_to_cart',
+		'select_item-NR',
+		'view_item_list-NR',
+		'view_item_list-Mar',
+		'begin_checkout',
+		'purchase',
+		'Event.docSubmit',
+		'OneTrustLoaded',
+		'OptanonLoaded',
+		'OneTrustGroupsUpdated',
+		'gtm_consent_default'
+	];
 
 	/******************************
 	* EVENT PREFIX ALLOWLIST TOGGLE
