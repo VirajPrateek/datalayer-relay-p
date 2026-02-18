@@ -14,13 +14,14 @@
 	var SERVER_CONTAINER_URL = '{{SERVER_CONTAINER_URL}}';
 	var LOAD_GTAG_FROM_SST = false;
 	var DELAY_GTAG_LOAD_MS = 2000;
-	var RELAY_VERSION = 'dlr-vanilla-v3.2.3'; // consent mode + sst dependency fix + addtional blocklist
+	var RELAY_VERSION = 'dlr-vanilla-v3.3.0'; // removed allowlist, added exact blocklist
 
 	// Production default
 	var DEBUG = false;
 
-	var BLOCKED_EVENT_PREFIXES = [
-		'gtm.', 'js',
+	var BLOCKED_EVENT_PREFIXES = ['gtm.', 'js'];
+	
+	var BLOCKED_EVENT_EXACT = [
 		'view_item',
 		'add_to_cart',
 		'select_item-NR',
@@ -34,22 +35,6 @@
 		'OneTrustGroupsUpdated',
 		'gtm_consent_default'
 	];
-
-	/******************************
-	* EVENT PREFIX ALLOWLIST TOGGLE
-	/******************************/
-	var ENABLE_EVENT_PREFIX_ALLOWLIST = false; // default OFF (backward compatible)
-
-	var ALLOWED_EVENT_PREFIXES = [
-		'pageView',
-		'miniGameOpen', 'gameOpen', 'virtualOpen',
-		'firstDeposit', 'deposit',
-		'Cart.', 'cart.',
-		'Event.Reg', 'Event.Track', 'Event.UKGC', 'Event.kyc', 'Event.KYC', 'Event.Login',
-		'contentView',
-		'paymentError', 'error'
-	];
-	/******************************/
 
 	var PARAM_DENYLIST = [
 		'send_to', 'eventCallback', 'eventTimeout',
@@ -108,13 +93,11 @@
 	}
 
 	function shouldBlockEventName(eventName) {
-		return startsWithAny(String(eventName || ''), BLOCKED_EVENT_PREFIXES);
-	}
-
-	function isEventAllowedByPrefix(eventName) {
-		if (!ENABLE_EVENT_PREFIX_ALLOWLIST) return true;
-		if (!ALLOWED_EVENT_PREFIXES.length) return false;
-		return startsWithAny(eventName, ALLOWED_EVENT_PREFIXES);
+		var name = String(eventName || '');
+		// Check exact matches first
+		if (BLOCKED_EVENT_EXACT.indexOf(name) > -1) return true;
+		// Then check prefixes
+		return startsWithAny(name, BLOCKED_EVENT_PREFIXES);
 	}
 
 	function shouldDropParamKey(key) {
@@ -406,7 +389,7 @@
 
 		var eventName = String(obj.event || '').trim();
 
-		if (!eventName || shouldBlockEventName(eventName) || !isEventAllowedByPrefix(eventName)) {
+		if (!eventName || shouldBlockEventName(eventName)) {
 			eventStats.blocked++;
 			return;
 		}
