@@ -1,7 +1,7 @@
 /******************************
  * SST (Server-Side Tagging) Relay Script
- * Optimized version based on Performance Review (Jan 2026)
- * Cookie consent handled in this version
+ * Cookie consent handled in this version 
+ * SST endpoint decoupled
  ******************************/
 
 (function (window, document) {
@@ -12,8 +12,9 @@
 	 ******************************/
 	var MEASUREMENT_ID = '{{GA4_PROPERTY}}';
 	var SERVER_CONTAINER_URL = '{{SERVER_CONTAINER_URL}}';
-	var LOAD_GTAG_FROM_SST = true;
-	var RELAY_VERSION = 'dlr-vanilla-v3.2.1'; //consentmode without buffer and timer, relay_version
+	var LOAD_GTAG_FROM_SST = false;
+	var DELAY_GTAG_LOAD_MS = 2000;
+	var RELAY_VERSION = 'dlr-vanilla-v3.2.2'; // consent mode + sst dependency fix
 
 	// Production default
 	var DEBUG = false;
@@ -202,14 +203,41 @@
 
 		var script = document.createElement('script');
 		script.async = true;
+
 		var idParam = 'id=' + encodeURIComponent(MEASUREMENT_ID);
 		var layerParam = '&l=' + encodeURIComponent(RELAY_DATALAYER_NAME);
 
-		script.src = (LOAD_GTAG_FROM_SST && SERVER_CONTAINER_URL)
-			? SERVER_CONTAINER_URL.replace(/\/+$/, '') + '/gtag/js?' + idParam + layerParam
-			: 'https://www.googletagmanager.com/gtag/js?' + idParam + layerParam;
+		var sstSrc = SERVER_CONTAINER_URL.replace(/\/+$/, '') +
+			'/gtag/js?' + idParam + layerParam;
 
-		document.head.appendChild(script);
+		var googleSrc =
+			'https://www.googletagmanager.com/gtag/js?' +
+			idParam + layerParam;
+
+		var fallbackTriggered = false;
+
+		script.onerror = function () {
+			if (fallbackTriggered) return;
+			fallbackTriggered = true;
+			if (DEBUG) {
+				console.warn('[DLR] SST gtag load failed. Falling back to Google CDN.');
+			}
+			var fallbackScript = document.createElement('script');
+			fallbackScript.async = true;
+			fallbackScript.src = googleSrc;
+			setTimeout(function () {
+				document.body.appendChild(fallbackScript);
+			}, DELAY_GTAG_LOAD_MS);
+		};
+
+		script.src = (LOAD_GTAG_FROM_SST && SERVER_CONTAINER_URL)
+			? sstSrc
+			: googleSrc;
+
+		setTimeout(function () {
+			document.body.appendChild(script);
+		}, DELAY_GTAG_LOAD_MS);
+
 	}
 
 	/******************************
