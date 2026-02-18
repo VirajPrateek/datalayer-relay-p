@@ -34,8 +34,15 @@
 		'OneTrustLoaded': true,
 		'OptanonLoaded': true,
 		'OneTrustGroupsUpdated': true,
-		'gtm_consent_default': true
+		'gtm_consent_default': true,
+		'gameMultiplierGA4': true,
+		'productDetails-GA4': true,
+        'purchaseComplete-GA4': true,
+		'Clean Impressions': true,
+		'cleandataLayer': true,
+        'Event.Balance_Refresh': true
 	};
+
 
 	// Convert to object for O(1) lookup performance
 	var PARAM_DENYLIST = {
