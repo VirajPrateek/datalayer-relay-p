@@ -12,6 +12,7 @@
 	 ******************************/
 	var MEASUREMENT_ID = '{{GA4_PROPERTY}}';
 	var SERVER_CONTAINER_URL = '{{SERVER_CONTAINER_URL}}';
+	var COOKIE_DOMAIN = '{{COOKIE_DOMAIN}}';
 	var LOAD_GTAG_FROM_SST = false;
 	var DELAY_GTAG_LOAD_MS = 2000;
 	var RELAY_VERSION = 'dlr-vanilla-v3.3.1'; // removed allowlist, added exact blocklist
@@ -209,7 +210,9 @@
 			transport_url: SERVER_CONTAINER_URL
 				? SERVER_CONTAINER_URL.replace(/\/+$/, '')
 				: undefined,
-			relay_version: RELAY_VERSION
+			relay_version: RELAY_VERSION,
+			cookie_domain: COOKIE_DOMAIN || 'auto',
+			cookie_flags: 'secure;samesite=none'
 		});
 
 		var script = document.createElement('script');

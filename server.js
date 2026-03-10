@@ -8,12 +8,14 @@ const PORT = process.env.PORT || 3000;
 // Environment variables with defaults
 const GA4_PROPERTY = process.env.GA4_PROPERTY || 'G-XXXXXXXXXX';
 const SERVER_CONTAINER_URL = process.env.SERVER_CONTAINER_URL || 'https://localhost:8888';
+const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || 'auto';
 
 // Template substitution function
 function substituteTemplate(content) {
   return content
     .replace(/\{\{GA4_PROPERTY\}\}/g, GA4_PROPERTY)
-    .replace(/\{\{SERVER_CONTAINER_URL\}\}/g, SERVER_CONTAINER_URL);
+    .replace(/\{\{SERVER_CONTAINER_URL\}\}/g, SERVER_CONTAINER_URL)
+    .replace(/\{\{COOKIE_DOMAIN\}\}/g, COOKIE_DOMAIN);
 }
 
 // Middleware to serve static files with template substitution for specific file types
