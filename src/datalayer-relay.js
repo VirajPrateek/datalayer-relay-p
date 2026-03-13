@@ -15,7 +15,7 @@
 	var COOKIE_DOMAIN = '{{COOKIE_DOMAIN}}';
 	var LOAD_GTAG_FROM_SST = false;
 	var DELAY_GTAG_LOAD_MS = 2000;
-	var RELAY_VERSION = 'dlr-vanilla-v3.3.1'; // removed allowlist, added exact blocklist
+	var RELAY_VERSION = 'dlr-vanilla-v3.3.2'; // gtag configs added
 
 	// Production default
 	var DEBUG = false;
