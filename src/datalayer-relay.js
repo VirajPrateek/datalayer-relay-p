@@ -15,7 +15,7 @@
 	var COOKIE_DOMAIN = '{{COOKIE_DOMAIN}}';
 	var LOAD_GTAG_FROM_SST = false;
 	var DELAY_GTAG_LOAD_MS = 2000;
-	var RELAY_VERSION = 'dlr-vanilla-v3.3.2'; // gtag configs added
+	var RELAY_VERSION = 'dlr-vanilla-v3.3.3'; // gtag configs added + expanded blocklist
 
 	// Production default
 	var DEBUG = false;
@@ -24,24 +24,60 @@
 	
 	// Convert to object for O(1) lookup performance
 	var BLOCKED_EVENT_EXACT = {
-		'view_item': true,
-		'add_to_cart': true,
-		'select_item-NR': true,
-		'view_item_list-NR': true,
-		'view_item_list-Mar': true,
-		'begin_checkout': true,
-		'purchase': true,
-		'Event.docSubmit': true,
-		'OneTrustLoaded': true,
-		'OptanonLoaded': true,
-		'OneTrustGroupsUpdated': true,
-		'gtm_consent_default': true,
-		'gameMultiplierGA4': true,
-		'productDetails-GA4': true,
-        'purchaseComplete-GA4': true,
-		'Clean Impressions': true,
-		'cleandataLayer': true,
-        'Event.Balance_Refresh': true
+		'add_to_cart-Mar': true,                          // From GTM
+		'add_to_cart-Mod': true,                          // From GTM
+		'advance_filters': true,                          // Raw DL
+		'advfilters': true,                               // Raw DL
+		'begin_checkout-Mar': true,                       // From GTM
+		'begin_checkout-Mod': true,                       // From GTM
+		'Clean Impressions': true,                        // Raw DL
+		'cleandataLayer': true,                           // Raw DL
+		'error.inbox.claimOffer': true,                   // Raw DL
+		'error.inbox.getMessages': true,                  // Raw DL
+		'Event.Balance_Refresh': true,                    // Raw DL
+		'Event.boris.contactverification': true,          // Raw DL
+		'Event.ChangePinR': true,                         // Raw DL
+		// 'Event.docSubmit': true,                       // Raw DL — needed in DL
+		'Event.FastLogin': true,                          // Raw DL
+		'Event.FeebackLoad': true,                        // Raw DL
+		'Event.Functionality.BalanceBreakdown': true,     // Raw DL
+		'Event.Functionality.BCT': true,                  // Raw DL
+		'Event.Functionality.Cts': true,                  // Raw DL
+		'Event.Functionality.Generic': true,              // Raw DL
+		'Event.Functionality.JumioKyc': true,             // Raw DL
+		'Event.Functionality.SELogos': true,              // Raw DL
+		'Event.inbox.messageDeleted': true,               // Raw DL
+		'Event.inbox.previewOpenedLessthan1Sec': true,    // Raw DL
+		'Event.inbox.unknown_source': true,               // Raw DL
+		'Event.OverAskSKU': true,                         // Raw DL
+		'Event.searchGameCasia': true,                    // Raw DL
+		'gameMultiplier': true,                           // Raw DL
+		'gameMultiplierGA4': true,                        // From GTM
+		'GEOLocation.ERROR': true,                        // Raw DL
+		'gtm_consent_default': true,                      // From GTM
+		'Integration with message': true,                 // Raw DL
+		'Message View': true,                             // Raw DL
+		'OneTrustGroupsUpdated': true,                    // Raw DL
+	    'OneTrustLoaded': true,                           // Raw DL
+		'OptanonLoaded': true,                            // Raw DL
+		'page.referringAction': true,                     // Raw DL
+		'productDetail': true,                            // Raw DL
+		'productDetails-GA4': true,                       // From GTM
+		'purchase': true,                                 // From GTM
+		'purchase-Mar': true,                             // From GTM
+		'purchase-Mod': true,                             // From GTM
+		'purchaseComplete-GA4': true,                     // From GTM
+		'qubit.experience': true,                         // Raw DL
+		'select_item-Mar': true,                          // From GTM
+		'select_item-NR': true,                           // From GTM
+		'sendFinalBatch': true,                           // From GTM
+		'Session.End': true,                              // Raw DL
+		'shownextraces': true,                            // Raw DL
+		'StaticData': true,                               // Raw DL
+		'Toast message timeout': true,                    // Raw DL
+		'view_item': true,                                // From GTM
+		'view_item_list-Mar': true,                       // From GTM
+		'view_item_list-NR': true                         // From GTM
 	};
 
 
