@@ -15,7 +15,7 @@
 	var COOKIE_DOMAIN = '{{COOKIE_DOMAIN}}';
 	var LOAD_GTAG_FROM_SST = false;
 	var DELAY_GTAG_LOAD_MS = 2000;
-	var RELAY_VERSION = 'dlr-vanilla-v3.3.3'; // gtag configs added + expanded blocklist
+	var RELAY_VERSION = 'dlr-vanilla-v3.3.4'; // gtag configs added + expanded blocklist
 
 	// Production default
 	var DEBUG = false;
@@ -44,7 +44,6 @@
 		'Event.inbox.previewOpenedLessthan1Sec': true,
 		'Event.inbox.unknown_source': true,
 		'Event.OverAskSKU': true,
-		'Event.searchGameCasia': true,
 		'gameMultiplier': true,
 		'GEOLocation.ERROR': true,
 		'Integration with message': true,
