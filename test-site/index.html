@@ -365,6 +365,44 @@
                 </div>
 
                 <div class="test-section">
+                    <h3>Consent (gtag-style Arguments)</h3>
+
+                    <button class="button" onclick="testGtagConsentDefault()">
+                        Consent Default (gtag-style)
+                    </button>
+                    <div class="button-description">Pushes <code>['consent', 'default', {...}]</code> as Arguments object</div>
+
+                    <button class="button" onclick="testGtagConsentUpdate()">
+                        Consent Update (gtag-style)
+                    </button>
+                    <div class="button-description">Pushes <code>['consent', 'update', {...}]</code> as Arguments object</div>
+
+                    <button class="button" onclick="testGtagOneTrustLoaded()">
+                        OneTrustLoaded (gtag-style)
+                    </button>
+                    <div class="button-description">Pushes <code>['event', 'OneTrustLoaded', {OnetrustActiveGroups}]</code></div>
+
+                    <button class="button" onclick="testGtagOneTrustUpdated()">
+                        OneTrustGroupsUpdated (gtag-style)
+                    </button>
+                    <div class="button-description">Pushes <code>['event', 'OneTrustGroupsUpdated', {OnetrustActiveGroups}]</code></div>
+                </div>
+
+                <div class="test-section">
+                    <h3>Consent (Standard Object Push)</h3>
+
+                    <button class="button" onclick="testOneTrustLoadedStandard()">
+                        OneTrustLoaded (standard)
+                    </button>
+                    <div class="button-description">Pushes <code>{event: 'OneTrustLoaded', OnetrustActiveGroups: ...}</code></div>
+
+                    <button class="button" onclick="testOneTrustUpdatedStandard()">
+                        OneTrustGroupsUpdated (standard)
+                    </button>
+                    <div class="button-description">Pushes <code>{event: 'OneTrustGroupsUpdated', OnetrustActiveGroups: ...}</code></div>
+                </div>
+
+                <div class="test-section">
                     <h3>Custom DataLayer Replay</h3>
                     <textarea id="customDataLayer" rows="10" placeholder='Paste stringified JSON array here, e.g.:\n[\n  {"event": "page_view", "page_location": "https://example.com"},\n  {"event": "purchase", "transaction_id": "T123", "value": 99.99}\n]' style="width: 100%; padding: 10px; border-radius: 6px; border: 2px solid #e9ecef; font-family: 'Courier New', monospace; font-size: 13px; resize: vertical;"></textarea>
                     <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px;">
@@ -558,6 +596,57 @@
 
             window.dataLayer.push(eventData);
             logEvent('login', eventData);
+        }
+
+        // --- Consent Test Functions ---
+
+        // Mimic how gtag() works in production: pushes arguments to dataLayer
+        function gtag() { dataLayer.push(arguments); }
+
+        function testGtagConsentDefault() {
+            gtag('consent', 'default', {
+                analytics_storage: 'denied',
+                ad_storage: 'denied',
+                ad_user_data: 'denied',
+                ad_personalization: 'denied'
+            });
+            logEvent('gtag consent default', {analytics_storage:'denied', ad_storage:'denied', ad_user_data:'denied', ad_personalization:'denied'});
+        }
+
+        function testGtagConsentUpdate() {
+            gtag('consent', 'update', {
+                analytics_storage: 'granted',
+                ad_storage: 'granted',
+                ad_user_data: 'granted',
+                ad_personalization: 'granted'
+            });
+            logEvent('gtag consent update', {analytics_storage:'granted', ad_storage:'granted', ad_user_data:'granted', ad_personalization:'granted'});
+        }
+
+        function testGtagOneTrustLoaded() {
+            gtag('event', 'OneTrustLoaded', {
+                OnetrustActiveGroups: ',C0001,C0002,C0004,'
+            });
+            logEvent('gtag event OneTrustLoaded', {OnetrustActiveGroups: ',C0001,C0002,C0004,'});
+        }
+
+        function testGtagOneTrustUpdated() {
+            gtag('event', 'OneTrustGroupsUpdated', {
+                OnetrustActiveGroups: ',C0001,C0002,'
+            });
+            logEvent('gtag event OneTrustGroupsUpdated', {OnetrustActiveGroups: ',C0001,C0002,'});
+        }
+
+        function testOneTrustLoadedStandard() {
+            var eventData = {event: 'OneTrustLoaded', OnetrustActiveGroups: ',C0001,C0002,C0004,'};
+            window.dataLayer.push(eventData);
+            logEvent('OneTrustLoaded (standard)', eventData);
+        }
+
+        function testOneTrustUpdatedStandard() {
+            var eventData = {event: 'OneTrustGroupsUpdated', OnetrustActiveGroups: ',C0001,C0002,'};
+            window.dataLayer.push(eventData);
+            logEvent('OneTrustGroupsUpdated (standard)', eventData);
         }
 
         function replayCustomDataLayer() {
