@@ -15,7 +15,7 @@
 	var COOKIE_DOMAIN = '{{COOKIE_DOMAIN}}';
 	var LOAD_GTAG_FROM_SST = false;
 	var DELAY_GTAG_LOAD_MS = 2000;
-	var RELAY_VERSION = 'dlr-vanilla-v3.3.4'; // gtag configs added + expanded blocklist
+	var RELAY_VERSION = 'dlr-vanilla-v3.3.5'; // handle gtag-style consent in dataLayer
 
 	// Production default
 	var DEBUG = false;
@@ -57,7 +57,6 @@
 		'Toast message timeout': true
 	};
 
-
 	// Convert to object for O(1) lookup performance
 	var PARAM_DENYLIST = {
 		'send_to': true,
@@ -80,6 +79,13 @@
 	// Persistent state limits
 	var PERSIST_MAX_KEYS = 200;
 	var PERSIST_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+	// OneTrust event names that may arrive as gtag-style Arguments objects
+	// Matches the same events handled by handleOneTrustConsent for standard pushes
+	var ONETRUST_CONSENT_EVENTS = {
+		'OneTrustLoaded': 'default',
+		'OneTrustGroupsUpdated': 'update'
+	};
 
 	/******************************
 	 * FAST LOOKUPS
@@ -160,6 +166,51 @@
 		} else {
 			setTimeout(callback, 0);
 		}
+	}
+
+	/******************************
+	 * GTAG-STYLE ARGUMENTS DETECTION
+	 ******************************/
+	function isGtagArguments(obj) {
+		return obj &&
+			typeof obj === 'object' &&
+			typeof obj[0] === 'string' &&
+			Object.prototype.hasOwnProperty.call(obj, '0') &&
+			!Object.prototype.hasOwnProperty.call(obj, 'event');
+	}
+
+	function handleGtagStyleConsent(obj) {
+		if (!isGtagArguments(obj)) return false;
+
+		var command = obj[0];
+		var arg1 = obj[1];
+
+		// Handle: gtag('consent', 'default'|'update', {consent_state})
+		// Direct passthrough — no OneTrust logic, just forward the consent state
+		if (command === 'consent') {
+			var arg2 = obj[2];
+			if ((arg1 === 'default' || arg1 === 'update') && arg2 && typeof arg2 === 'object') {
+				window.relay_gtag('consent', arg1, arg2);
+				log('[DLR] Consent ' + arg1 + ' applied (gtag-style)');
+				return true;
+			}
+			return false;
+		}
+
+		// Handle: gtag('event', 'OneTrustLoaded'|'OneTrustGroupsUpdated', {...})
+		// Normalize to standard object shape and delegate to handleOneTrustConsent
+		if (command === 'event' && ONETRUST_CONSENT_EVENTS[arg1]) {
+			var params = obj[2];
+			var groupsStr = params && params.OnetrustActiveGroups;
+			if (!groupsStr) return false;
+
+			return handleOneTrustConsent({
+				event: arg1,
+				OnetrustActiveGroups: groupsStr
+			});
+		}
+
+		return false;
 	}
 
 	/******************************
@@ -408,6 +459,8 @@
 
 	function processDataLayerObject(obj) {
 		if (!obj || typeof obj !== 'object') return;
+
+		if (handleGtagStyleConsent(obj)) return;
 
 		if (handleOneTrustConsent(obj)) return;
 
