@@ -10,12 +10,12 @@
 	/******************************
 	 * CONFIG
 	 ******************************/
-	var MEASUREMENT_ID = '{{GA4_PROPERTY}}';
-	var SERVER_CONTAINER_URL = '{{SERVER_CONTAINER_URL}}';
-	var COOKIE_DOMAIN = '{{COOKIE_DOMAIN}';
+	var MEASUREMENT_ID = 'G-W1SDKXQRTM';
+	var SERVER_CONTAINER_URL = 'https://sst.sportingbet.bet.br';
+	var COOKIE_DOMAIN = 'sportingbet.bet.br';
 	var LOAD_GTAG_FROM_SST = false;
 	var DELAY_GTAG_LOAD_MS = 2000;
-	var RELAY_VERSION = 'dlr-vanilla-v3.4.0'; // consent mode handling with gtag command + client and session ID window objects
+	var RELAY_VERSION = 'dlr-vanilla-v3.4.0'; // gtag-style consent + cookie banner events forwarded to sGTM
 
 	// Production default
 	var DEBUG = false;
@@ -80,12 +80,6 @@
 	var PERSIST_MAX_KEYS = 200;
 	var PERSIST_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
-	// OneTrust event names that may arrive as gtag-style Arguments objects
-	var ONETRUST_CONSENT_EVENTS = {
-		'OneTrustLoaded': 'default',
-		'OneTrustGroupsUpdated': 'update'
-	};
-
 	/******************************
 	 * FAST LOOKUPS
 	 ******************************/
@@ -106,6 +100,20 @@
 	for (var i = 0; i < COMMON_GTAG_PARAMS.length; i++) {
 		COMMON_GTAG_PARAM_KEYS[COMMON_GTAG_PARAMS[i]] = true;
 	}
+
+	// Consent Events from OneTrust needed for Google Consent Mode Processing
+	var ONETRUST_CONSENT_EVENTS = {
+		'OneTrustLoaded': 'default',
+		'OneTrustGroupsUpdated': 'update'
+	};
+
+	// OneTrust cookie banner interaction events that arrive as gtag-style Arguments objects.
+	var ONETRUST_BANNER_EVENTS = {
+		'cookie_banner_accept': true,
+		'cookie_banner_close':  true,
+		'cookie_banner_event':  true,
+		'cookie_banner_open':   true
+	};
 
 	/******************************
 	 * LOGGING (true no-op when DEBUG=false)
@@ -167,78 +175,61 @@
 		}
 	}
 
-	function getCookie(name) {
-    var match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
-    return match ? decodeURIComponent(match[1]) : '';
-  }
+	/******************************
+	 * GTAG-STYLE ARGUMENTS DETECTION
+	 ******************************/
+	function isGtagArguments(obj) {
+		return obj &&
+			typeof obj === 'object' &&
+			typeof obj[0] === 'string' &&
+			Object.prototype.hasOwnProperty.call(obj, '0') &&
+			!Object.prototype.hasOwnProperty.call(obj, 'event');
+	}
 
-  function getGAClientId() {
-    // _ga cookie format: GA1.1.XXXXXXXXXX.XXXXXXXXXX
-    var raw = getCookie('_ga');
-    if (!raw) return '';
-    var parts = raw.split('.');
-    return parts.length >= 4 ? parts[2] + '.' + parts[3] : '';
-  }
+	function handleGtagStyleConsent(obj) {
+		if (!isGtagArguments(obj)) return false;
 
-  function getGASessionId() {
-    // _ga_<STREAM> cookie format: GS2.3.s<session_id>$o...$g...$t...
-    var streamId = MEASUREMENT_ID.replace('G-', '');
-    var raw = getCookie('_ga_' + streamId);
-    if (!raw) return '';
-    var match = raw.match(/\.s(\d+)\$/);
-    return match ? match[1] : '';
-  }
+		var command = obj[0];
+		var arg1 = obj[1];
 
-  // Expose as functions — always returns fresh values from cookies
-  window.getGAClientId = getGAClientId;
-  window.getGASessionId = getGASessionId;
+		// Handle: gtag('consent', 'default'|'update', {consent_state}) direct passthrough
+		if (command === 'consent') {
+			var arg2 = obj[2];
+			if ((arg1 === 'default' || arg1 === 'update') && arg2 && typeof arg2 === 'object') {
+				window.relay_gtag('consent', arg1, arg2);
+				log('[DLR] Consent ' + arg1 + ' applied (gtag-style)');
+				return true;
+			}
+			return false;
+		}
 
-  /******************************
-   * GTAG-STYLE ARGUMENTS DETECTION
-   ******************************/
-  function isGtagArguments(obj) {
-    return (
-      obj &&
-      typeof obj === 'object' &&
-      typeof obj[0] === 'string' &&
-      Object.prototype.hasOwnProperty.call(obj, '0') &&
-      !Object.prototype.hasOwnProperty.call(obj, 'event')
-    );
-  }
+		// Handle: gtag('event', 'OneTrustLoaded'|'OneTrustGroupsUpdated', {...}), Normalize and delegate to handleOneTrustConsent
+		if (command === 'event' && ONETRUST_CONSENT_EVENTS[arg1]) {
+			var params = obj[2];
+			var groupsStr = params && params.OnetrustActiveGroups;
+			if (!groupsStr) return false;
 
-  function handleGtagStyleConsent(obj) {
-    if (!isGtagArguments(obj)) return false;
+			return handleOneTrustConsent({
+				event: arg1,
+				OnetrustActiveGroups: groupsStr
+			});
+		}
 
-    var command = obj[0];
-    var arg1 = obj[1];
+		// Handle: gtag('event', 'cookie_banner_*', {...})
+		if (command === 'event' && ONETRUST_BANNER_EVENTS[arg1]) {
+			var bannerParams = obj[2] && typeof obj[2] === 'object' ? obj[2] : {};
+			var bannerObj = Object.assign({ event: arg1 }, bannerParams);
+			updatePersistentState(bannerObj);
+			var bannerMerged = mergeWithPersistentState(bannerObj);
+			var normalised = splitAndBundleParams(bannerMerged);
+			eventStats.processed++;
+			queueEvent(arg1, normalised);
+			log('[DLR] Cookie banner event queued:', arg1);
+			return true;
+		}
 
-    // Handle: gtag('consent', 'default'|'update', {consent_state})
-    // Direct passthrough — no OneTrust logic, just forward the consent state
-    if (command === 'consent') {
-      var arg2 = obj[2];
-      if ((arg1 === 'default' || arg1 === 'update') && arg2 && typeof arg2 === 'object') {
-        window.relay_gtag('consent', arg1, arg2);
-        log('[DLR] Consent ' + arg1 + ' applied (gtag-style)');
-        return true;
-      }
-      return false;
-    }
-
-    // Handle: gtag('event', 'OneTrustLoaded'|'OneTrustGroupsUpdated', {...})
-    // Normalize to standard object shape and delegate to handleOneTrustConsent
-    if (command === 'event' && ONETRUST_CONSENT_EVENTS[arg1]) {
-      var params = obj[2];
-      var groupsStr = params && params.OnetrustActiveGroups;
-      if (!groupsStr) return false;
-
-      return handleOneTrustConsent({
-        event: arg1,
-        OnetrustActiveGroups: groupsStr
-      });
-    }
-
-    return false;
-  }
+		return false;
+	}
 
 	/******************************
 	 * CONSENT HANDLING (NON-BLOCKING)
@@ -321,16 +312,6 @@
 
 		var fallbackTriggered = false;
 
-		// Set GA identities only after gtag loads — cookies don't exist before this point
-		// on a first visit, so reading them at script init would always yield empty strings.
-		function onGtagLoaded() {
-			window.ga_client_id = getGAClientId();
-			window.ga_session_id = getGASessionId();
-			log('[DLR] GA identities initialised after gtag load');
-		}
-
-		script.onload = onGtagLoaded;
-
 		script.onerror = function () {
 			if (fallbackTriggered) return;
 			fallbackTriggered = true;
@@ -340,7 +321,6 @@
 			var fallbackScript = document.createElement('script');
 			fallbackScript.async = true;
 			fallbackScript.src = googleSrc;
-			fallbackScript.onload = onGtagLoaded;
 			setTimeout(function () {
 				document.body.appendChild(fallbackScript);
 			}, DELAY_GTAG_LOAD_MS);
@@ -495,11 +475,6 @@
 		}
 	}
 
-	function refreshGAIdentities() {
-    	window.ga_client_id = getGAClientId();
-    	window.ga_session_id = getGASessionId();
-  	}
-
 	function processDataLayerObject(obj) {
 		if (!obj || typeof obj !== 'object') return;
 
@@ -519,9 +494,6 @@
 			eventStats.blocked++;
 			return;
 		}
-
-		// Refresh window objects with current cookie values on every processed event
-    	refreshGAIdentities();
 
 		var mergedObj = mergeWithPersistentState(obj);
 		var params = splitAndBundleParams(mergedObj);
