@@ -107,12 +107,11 @@
 		'OneTrustGroupsUpdated': 'update'
 	};
 
-	// OneTrust cookie banner interaction events that arrive as gtag-style Arguments objects.
+	// Gtag-style event allowlist: events that may arrive as Arguments objects
+	// when OneTrust SDK calls window.gtag() (defined by client GTM).
+	// cookie_banner_* event names are derived server-side from optanonAction param.
 	var ONETRUST_BANNER_EVENTS = {
-		'cookie_banner_accept': true,
-		'cookie_banner_close':  true,
-		'cookie_banner_event':  true,
-		'cookie_banner_open':   true
+		'trackOptanonEvent': true,
 	};
 
 	/******************************
@@ -215,7 +214,7 @@
 			});
 		}
 
-		// Handle: gtag('event', 'cookie_banner_*', {...})
+		// Handle: gtag('event', 'trackOptanonEvent', {...}) — arrives as Arguments when window.gtag exists
 		if (command === 'event' && ONETRUST_BANNER_EVENTS[arg1]) {
 			var bannerParams = obj[2] && typeof obj[2] === 'object' ? obj[2] : {};
 			var bannerObj = Object.assign({ event: arg1 }, bannerParams);
@@ -224,7 +223,7 @@
 			var normalised = splitAndBundleParams(bannerMerged);
 			eventStats.processed++;
 			queueEvent(arg1, normalised);
-			log('[DLR] Cookie banner event queued:', arg1);
+			log('[DLR] Gtag-style event queued:', arg1);
 			return true;
 		}
 
