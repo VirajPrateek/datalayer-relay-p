@@ -10,9 +10,9 @@
 	/******************************
 	 * CONFIG
 	 ******************************/
-	var MEASUREMENT_ID = 'G-W1SDKXQRTM';
-	var SERVER_CONTAINER_URL = 'https://sst.sportingbet.bet.br';
-	var COOKIE_DOMAIN = 'sportingbet.bet.br';
+	var MEASUREMENT_ID = '{{GA4_PROPERTY}}';
+	var SERVER_CONTAINER_URL = '{{SERVER_CONTAINER_URL}}';
+	var COOKIE_DOMAIN = '{{COOKIE_DOMAIN}}';
 	var LOAD_GTAG_FROM_SST = false;
 	var DELAY_GTAG_LOAD_MS = 2000;
 	var RELAY_VERSION = 'dlr-vanilla-v3.4.0'; // gtag-style consent + cookie banner events forwarded to sGTM
@@ -107,11 +107,10 @@
 		'OneTrustGroupsUpdated': 'update'
 	};
 
-	// Gtag-style event allowlist: events that may arrive as Arguments objects
-	// when OneTrust SDK calls window.gtag() (defined by client GTM).
-	// cookie_banner_* event names are derived server-side from optanonAction param.
+	// OneTrust cookie banner interaction events that arrive as gtag-style Arguments objects.
 	var ONETRUST_BANNER_EVENTS = {
-		'trackOptanonEvent': true,
+		'cookie_banner_loaded': true,
+		'trackOptanonEvent':  true
 	};
 
 	/******************************
@@ -214,7 +213,7 @@
 			});
 		}
 
-		// Handle: gtag('event', 'trackOptanonEvent', {...}) — arrives as Arguments when window.gtag exists
+		// Handle: gtag('event', 'cookie_banner_*', {...})
 		if (command === 'event' && ONETRUST_BANNER_EVENTS[arg1]) {
 			var bannerParams = obj[2] && typeof obj[2] === 'object' ? obj[2] : {};
 			var bannerObj = Object.assign({ event: arg1 }, bannerParams);
@@ -223,7 +222,7 @@
 			var normalised = splitAndBundleParams(bannerMerged);
 			eventStats.processed++;
 			queueEvent(arg1, normalised);
-			log('[DLR] Gtag-style event queued:', arg1);
+			log('[DLR] Cookie banner event queued:', arg1);
 			return true;
 		}
 
