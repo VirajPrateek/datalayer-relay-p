@@ -8,22 +8,22 @@ This document tracks all DataLayer Relay (DLR) script deployments across platfor
 
 | Environment | Version | Deployed Date | Deployed By | Key Changes | Status |
 |-------------|---------|---------------|-------------|-------------|--------|
-| **Prod** | dlr-vanilla-v3.3.1 | 2026-02-19 | - | Expanded event blocklist with GA4 and data layer events, consent mode support | ✅ Active |
-| **QA2** | dlr-vanilla-v3.3.1 (async) | 2026-02-18 | - | Expanded event blocklist with GA4 and data layer events, consent mode support, async loading | ✅ Active |
-| **Test** | dlr-vanilla-v2.6.1 | - | - | Performance optimization + allowlist | ✅ Active |
+| **Prod** | dlr-vanilla-v3.4.0 | - | - | Gtag-style consent handling, cookie banner event forwarding, expanded OneTrust banner events | 📋 Shared with team |
+| **QA2** | dlr-vanilla-v3.4.0 | - | - | Gtag-style consent handling, cookie banner event forwarding | 📋 Shared with team |
+| **Test** | dlr-vanilla-v3.4.0 (Partytown) | - | - | Gtag-style consent handling, cookie banner event forwarding, Partytown variant | 📋 Shared with team |
 
 ### Landing Pages (Sitecore)
 
 | Environment | Version | Deployed Date | Deployed By | Key Changes | Status |
 |-------------|---------|---------------|-------------|-------------|--------|
-| **Prod** | dlr-sitecore-v3.3.1 | 2026-02-23 | - | Expanded event blocklist with GA4 and data layer events, consent mode support | ✅ Active |
+| **QA** | dlr-sitecore-v3.4.0 | - | - | Gtag-style consent handling, cookie banner event forwarding | 📋 Shared with team |
 
 ### Casino Platform
 
 | Environment | Version | Deployed Date | Deployed By | Key Changes | Status |
 |-------------|---------|---------------|-------------|-------------|--------|
-| **Prod** | - | - | - | Not deployed yet | ⏸️ Pending |
-| **QA2** | - | - | - | Not deployed yet | ⏸️ Pending |
+| **Prod** | dlr-casino-v3.4.0 | - | - | Gtag-style consent handling, cookie banner event forwarding | 📋 Shared with team |
+| **QA** | - | - | - | Not deployed yet | ⏸️ Pending |
 
 ### In-Game Platform
 
@@ -36,15 +36,15 @@ This document tracks all DataLayer Relay (DLR) script deployments across platfor
 
 | Environment | Version | Deployed Date | Deployed By | Key Changes | Status |
 |-------------|---------|---------------|-------------|-------------|--------|
-| **Prod** | - | - | - | Not deployed yet | ⏸️ Pending |
-| **QA2** | - | - | - | Not deployed yet | ⏸️ Pending |
+| **Prod** | dlr-bingo-v3.4.0 | - | - | Gtag-style consent handling, cookie banner event forwarding | 📋 Shared with team |
+| **QA** | - | - | - | Not deployed yet | ⏸️ Pending |
 
 ### Poker Platform
 
 | Environment | Version | Deployed Date | Deployed By | Key Changes | Status |
 |-------------|---------|---------------|-------------|-------------|--------|
 | **Prod** | - | - | - | Not deployed yet | ⏸️ Pending |
-| **QA2** | - | - | - | Not deployed yet | ⏸️ Pending |
+| **QA** | dlr-poker-v3.4.0 | - | - | Gtag-style consent handling, cookie banner event forwarding | 📋 Shared with team |
 
 ---
 
@@ -69,8 +69,8 @@ This document tracks all DataLayer Relay (DLR) script deployments across platfor
 
 1. **Update Source:** Modify `src/datalayer-relay.js` with required changes
 2. **Set Version:** Update `RELAY_VERSION` variable to match deployment target
-   - Format: `v{major}.{minor}.{patch}-{platform}-{environment}`
-   - Example: `v3.3.1-vanilla-prod`
+   - Format: `dlr-{platform}-v{major}.{minor}.{patch}`
+   - Example: `dlr-vanilla-v3.4.0`
 3. **Configure:** Set `MEASUREMENT_ID` and `SERVER_CONTAINER_URL` for target platform
 4. **Build:** Generate deployment file named `dlr-{platform}-v{version}.js`
 5. **Test:** Verify in target environment
